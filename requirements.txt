@@ -1,0 +1,19 @@
+# SENTINEL - Vehicle Intelligence Platform
+# Required dependencies
+
+# Web Framework
+flask>=3.0.0
+
+# Machine Learning
+ultralytics>=8.2.0
+opencv-python>=4.10.0
+numpy>=1.26.0
+Pillow>=10.3.0
+
+# OCR (optional - graceful fallback if not installed)
+easyocr>=1.7.1
+
+# Advanced Tracking (optional - graceful fallback)
+# filterpy>=1.4.5
+# lapjv>=1.3.1
+# scipy>=1.12.0

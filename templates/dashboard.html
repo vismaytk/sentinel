@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Live Feed{% endblock %}
+
+{% block content %}
+<main class="main">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+        <!-- System Status -->
+        <div class="card">
+            <div class="card-header">
+                <h3>System Status</h3>
+            </div>
+            <div class="card-body">
+                <div class="status-row">
+                    <span class="key">Camera</span>
+                    <span class="value connected" id="camera-status-value">connecting</span>
+                </div>
+                <div class="status-row">
+                    <span class="key">Resolution</span>
+                    <span class="value" id="resolution-value">—</span>
+                </div>
+                <div class="status-row">
+                    <span class="key">Frames Read</span>
+                    <span class="value" id="frames-read-value">0</span>
+                </div>
+                <div class="status-row">
+                    <span class="key">Session ID</span>
+                    <span class="value" id="session-id-value">—</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active Tracks -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Active Tracks</h3>
+            </div>
+            <div class="card-body">
+                <div class="track-list" id="active-tracks">
+                    <div class="empty-state">
+                        <div class="empty-state-text">No active tracks</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detection Counts -->
+        <div class="card">
+            <div class="card-header">
+                <h3>Detection Counts</h3>
+            </div>
+            <div class="card-body">
+                <div class="count-bars">
+                    <div class="count-bar commercial">
+                        <div class="count-bar-header">
+                            <span class="count-bar-label">Commercial</span>
+                            <span class="count-bar-value" id="commercial-count">0</span>
+                        </div>
+                        <div class="count-bar-track">
+                            <div class="count-bar-fill" id="commercial-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="count-bar military">
+                        <div class="count-bar-header">
+                            <span class="count-bar-label">Military</span>
+                            <span class="count-bar-value" id="military-count">0</span>
+                        </div>
+                        <div class="count-bar-track">
+                            <div class="count-bar-fill" id="military-fill" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+    
+    <!-- Center Feed -->
+    <section class="feed-container">
+        <div class="feed-card">
+            <div class="feed-header">
+                <h2>◉ LIVE FEED</h2>
+                <span class="feed-fps" id="fps-value">0 FPS</span>
+            </div>
+            <div class="feed-body">
+                <img src="{{ url_for('main.video_feed') }}" alt="Live Feed">
+            </div>
+            <div class="feed-footer">
+                <span class="feed-meta">INFERENCE: 640×480</span>
+                <span class="feed-meta">MODEL: YOLOv8</span>
+                <span class="feed-meta">SKIP: 2</span>
+            </div>
+        </div>
+        
+        <!-- Bottom Sparklines -->
+        <div class="bottom-bar">
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-label">FPS (60s)</span>
+                    <span class="sparkline-value" id="fps-avg">0</span>
+                </div>
+                <canvas class="sparkline-canvas" id="fps-sparkline"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-label">Vehicles</span>
+                    <span class="sparkline-value" id="vehicle-total">0</span>
+                </div>
+                <canvas class="sparkline-canvas" id="vehicle-sparkline"></canvas>
+            </div>
+            <div class="sparkline-card">
+                <div class="sparkline-header">
+                    <span class="sparkline-label">Latency</span>
+                    <span class="sparkline-value" id="latency-value">0ms</span>
+                </div>
+                <canvas class="sparkline-canvas" id="latency-sparkline"></canvas>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Right Panel -->
+    <aside class="right-panel">
+        <!-- Threat Log -->
+        <div class="card" style="flex: 1;">
+            <div class="card-header">
+                <h3>Threat Log</h3>
+            </div>
+            <div class="card-body">
+                <div class="threat-log" id="detection-log">
+                    <div class="empty-state">
+                        <div class="empty-state-text">No detections yet</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Config Panel -->
+        <div class="card config-card">
+            <div class="config-header">
+                <h3>⚙ Configuration</h3>
+                <span class="config-toggle">▼</span>
+            </div>
+            <div class="config-body">
+                <div class="config-section">
+                    <div class="config-section-title">Vehicle Detection</div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <span class="slider-label">Commercial Confidence</span>
+                            <span class="slider-value">0.70</span>
+                        </div>
+                        <input type="range" min="0.1" max="0.99" step="0.01" value="0.70"
+                               data-config="vehicle_conf.commercial-vehicle">
+                    </div>
+                    
+                    <div class="slider-container" style="margin-top: 12px;">
+                        <div class="slider-header">
+                            <span class="slider-label">Military Confidence</span>
+                            <span class="slider-value">0.30</span>
+                        </div>
+                        <input type="range" min="0.1" max="0.99" step="0.01" value="0.30"
+                               data-config="vehicle_conf.military_vehicle">
+                    </div>
+                </div>
+                
+                <div class="config-section">
+                    <div class="config-section-title">Plate Detection</div>
+                    
+                    <div class="slider-container">
+                        <div class="slider-header">
+                            <span class="slider-label">Plate Confidence</span>
+                            <span class="slider-value">0.30</span>
+                        </div>
+                        <input type="range" min="0.1" max="0.99" step="0.01" value="0.30"
+                               data-config="plate_conf.License_Plate">
+                    </div>
+                </div>
+                
+                <div class="config-section">
+                    <div class="config-section-title">Features</div>
+                    
+                    <div class="config-row">
+                        <span class="config-label">OCR Enabled</span>
+                        <div class="toggle-switch active" data-config="enable_ocr"></div>
+                    </div>
+                    
+                    <div class="config-row">
+                        <span class="config-label">Tracking Enabled</span>
+                        <div class="toggle-switch active" data-config="enable_tracking"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </aside>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/config.js') }}"></script>
+{% endblock %}

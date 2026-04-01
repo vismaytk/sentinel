@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SENTINEL{% endblock %} — Vehicle Intelligence Platform</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sentinel.css') }}">
+    
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="wordmark">
+                <div class="wordmark-title">SENTINEL</div>
+                <div class="wordmark-subtitle">Vehicle Intelligence Platform</div>
+            </div>
+        </div>
+        
+        <div class="header-center">
+            <div class="mission-timer">
+                <div class="label">Mission Time</div>
+                <div class="value" id="mission-timer">00:00:00</div>
+            </div>
+            
+            <div class="threat-indicator clear" id="threat-indicator">
+                ◉ CLEAR
+            </div>
+        </div>
+        
+        <div class="header-right">
+            <div class="status-dots">
+                <div class="status-dot" data-system="camera">
+                    <span class="dot"></span>
+                    <span>CAMERA</span>
+                </div>
+                <div class="status-dot" data-system="detection">
+                    <span class="dot"></span>
+                    <span>DETECTION</span>
+                </div>
+                <div class="status-dot" data-system="database">
+                    <span class="dot"></span>
+                    <span>DATABASE</span>
+                </div>
+                <div class="status-dot" data-system="sse">
+                    <span class="dot"></span>
+                    <span>STREAM</span>
+                </div>
+            </div>
+            
+            <nav class="nav-tabs">
+                <a href="/" class="nav-tab {% if request.endpoint == 'main.dashboard' %}active{% endif %}">LIVE FEED</a>
+                <a href="/analytics" class="nav-tab {% if request.endpoint == 'main.analytics' %}active{% endif %}">ANALYTICS</a>
+            </nav>
+        </div>
+    </header>
+    
+    <!-- Main Content -->
+    {% block content %}{% endblock %}
+    
+    <!-- Scripts -->
+    {% block scripts %}{% endblock %}
+</body>
+</html>

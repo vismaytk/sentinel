@@ -1,0 +1,3 @@
+# Place your YOLO model files here:
+# - vehicle.pt
+# - license_plate.pt

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics{% endblock %}
+
+{% block head %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-layout">
+    <!-- Controls Bar -->
+    <div class="analytics-controls full-width">
+        <div class="control-group">
+            <span class="control-label">Time Range:</span>
+            <select class="control-select" id="date-range">
+                <option value="today">Today</option>
+                <option value="week">Last 7 Days</option>
+                <option value="all">All Time</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <span class="control-label">Auto Refresh:</span>
+            <button class="control-btn" id="auto-refresh">OFF</button>
+        </div>
+        
+        <div style="flex: 1;"></div>
+        
+        <button class="control-btn" id="refresh-btn">↻ Refresh</button>
+        <button class="control-btn primary" id="export-btn">⬇ Export CSV</button>
+    </div>
+    
+    <!-- Detection Timeline -->
+    <div class="chart-card full-width">
+        <h3 class="chart-title">Detection Timeline</h3>
+        <div class="chart-container">
+            <canvas id="timeline-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Vehicle Type Distribution -->
+    <div class="chart-card">
+        <h3 class="chart-title">Vehicle Type Distribution</h3>
+        <div class="chart-container">
+            <canvas id="distribution-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Plate Detection Rate -->
+    <div class="chart-card">
+        <h3 class="chart-title">Plate Detection Rate</h3>
+        <div class="stat-card-large">
+            <div class="stat-value-large" id="plate-rate">0%</div>
+            <div class="stat-label-large">Vehicles with Detected Plates</div>
+            <div class="stat-trend up">
+                <span>↑</span>
+                <span>vs previous session</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Confidence Distribution -->
+    <div class="chart-card">
+        <h3 class="chart-title">Confidence Distribution</h3>
+        <div class="chart-container">
+            <canvas id="confidence-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Performance Metrics -->
+    <div class="chart-card">
+        <h3 class="chart-title">Detection Speed Metrics</h3>
+        <div class="chart-container small">
+            <canvas id="performance-chart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Hourly Activity Heatmap -->
+    <div class="chart-card full-width">
+        <h3 class="chart-title">Hourly Activity Heatmap</h3>
+        <div id="heatmap-container">
+            <div class="empty-state">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Top Detected Plates -->
+    <div class="chart-card">
+        <h3 class="chart-title">Top Detected Plates</h3>
+        <div id="plates-table">
+            <div class="empty-state">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Session History -->
+    <div class="chart-card">
+        <h3 class="chart-title">Session History</h3>
+        <div id="sessions-table">
+            <div class="empty-state">
+                <div class="spinner"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+{% endblock %}
