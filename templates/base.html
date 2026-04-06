@@ -13,6 +13,9 @@
     <!-- Styles -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/sentinel.css') }}">
     
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
+    
     {% block head %}{% endblock %}
 </head>
 <body>
@@ -59,6 +62,7 @@
             <nav class="nav-tabs">
                 <a href="/" class="nav-tab {% if request.endpoint == 'main.dashboard' %}active{% endif %}">LIVE FEED</a>
                 <a href="/analytics" class="nav-tab {% if request.endpoint == 'main.analytics' %}active{% endif %}">ANALYTICS</a>
+                <a href="/report" class="nav-tab {% if request.endpoint == 'main.report' %}active{% endif %}">REPORT</a>
             </nav>
         </div>
     </header>

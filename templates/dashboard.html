@@ -120,6 +120,21 @@
     
     <!-- Right Panel -->
     <aside class="right-panel">
+        <!-- Alert Panel -->
+        <div class="card alert-card">
+            <div class="card-header">
+                <h3>Alerts</h3>
+                <button class="clear-alerts-btn" onclick="clearAlerts()">Clear</button>
+            </div>
+            <div class="card-body">
+                <div class="alert-panel" id="alert-panel">
+                    <div class="empty-state">
+                        <div class="empty-state-text">No active alerts</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Threat Log -->
         <div class="card" style="flex: 1;">
             <div class="card-header">
@@ -137,7 +152,7 @@
         <!-- Config Panel -->
         <div class="card config-card">
             <div class="config-header">
-                <h3>⚙ Configuration</h3>
+                <h3>Configuration</h3>
                 <span class="config-toggle">▼</span>
             </div>
             <div class="config-body">

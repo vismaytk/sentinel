@@ -6,6 +6,7 @@ Supports IP cameras, local files, and webcams.
 """
 
 import cv2
+import logging
 import os
 import time
 import threading
@@ -15,6 +16,8 @@ from datetime import datetime
 from typing import Optional, Tuple
 
 from config import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class CameraStream:
@@ -118,8 +121,8 @@ class CameraStream:
                         self._frames_read = 1
                     
                     self._set_status("connected")
-                    print(f"  ✅ Camera connected: {self._source}")
-                    print(f"     Resolution: {self._resolution[0]}x{self._resolution[1]}")
+                    logger.info("Camera connected: %s", self._source)
+                    logger.info("Resolution: %dx%d", self._resolution[0], self._resolution[1])
                     return True
                 else:
                     cap.release()
@@ -127,7 +130,7 @@ class CameraStream:
                 cap.release()
                 
         except Exception as e:
-            print(f"  ⚠ Connection attempt failed: {e}")
+            logger.warning("Connection attempt failed: %s", e)
         
         self._connected = False
         self._retry_count += 1
@@ -138,7 +141,7 @@ class CameraStream:
         """Main camera reading loop (runs in thread)."""
         # Initial connection with retries
         while self._running and not self._connected:
-            print(f"  📡 Connecting to camera (attempt {self._retry_count + 1})...")
+            logger.info("Connecting to camera (attempt %d)...", self._retry_count + 1)
             if self._try_connect():
                 break
             # Exponential backoff: 0s, 3s, 6s, 9s, max 10s
@@ -148,7 +151,10 @@ class CameraStream:
         # Main read loop
         while self._running:
             if not self._connected or self.cap is None:
-                print(f"  📡 Reconnecting (attempt {self._retry_count + 1})...")
+                if self._retry_count >= 10:
+                    logger.warning("Reconnecting (attempt %d) — camera offline for extended period", self._retry_count + 1)
+                else:
+                    logger.info("Reconnecting (attempt %d)...", self._retry_count + 1)
                 self._set_status("connecting")
                 if not self._try_connect():
                     time.sleep(3)
@@ -162,7 +168,7 @@ class CameraStream:
                     self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                     continue
                 else:
-                    print("  ⚠ Frame read failed — reconnecting...")
+                    logger.warning("Frame read failed — reconnecting...")
                     self._connected = False
                     self._set_status("error")
                     time.sleep(1)

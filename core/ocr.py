@@ -6,6 +6,7 @@ caching, and timeout mechanisms.
 """
 
 import cv2
+import logging
 import numpy as np
 import hashlib
 import time
@@ -15,13 +16,15 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 
 from config import get_config
 
+logger = logging.getLogger(__name__)
+
 # Try to import EasyOCR
 try:
     import easyocr
     EASYOCR_AVAILABLE = True
 except ImportError:
     EASYOCR_AVAILABLE = False
-    print("  ⚠ EasyOCR not installed - plate text recognition disabled")
+    logger.warning("EasyOCR not installed - plate text recognition disabled")
 
 
 class PlateOCR:
@@ -40,7 +43,9 @@ class PlateOCR:
         self._reader_lock = threading.Lock()
         self._cache: Dict[str, Tuple[Optional[str], Optional[float]]] = {}
         self._cache_lock = threading.Lock()
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self._executor = ThreadPoolExecutor(max_workers=self.cfg.OCR_WORKERS)
+        self._disabled = False  # Set True if initialization fails
+        self._logged_errors: set = set()  # Track logged exception types
         
         # Track OCR timing per track_id
         self._track_ocr_times: Dict[int, float] = {}
@@ -49,16 +54,23 @@ class PlateOCR:
     @property
     def reader(self):
         """Lazily initialize EasyOCR reader."""
+        if self._disabled:
+            return None
         if self._reader is None:
             with self._reader_lock:
                 if self._reader is None and EASYOCR_AVAILABLE and self.cfg.ENABLE_OCR:
-                    print("  📖 Initializing EasyOCR reader...")
-                    self._reader = easyocr.Reader(
-                        list(self.cfg.OCR_LANGUAGES),
-                        gpu=self.cfg.OCR_GPU,
-                        verbose=False
-                    )
-                    print("  ✅ EasyOCR ready")
+                    try:
+                        logger.info("Initializing EasyOCR reader...")
+                        self._reader = easyocr.Reader(
+                            list(self.cfg.OCR_LANGUAGES),
+                            gpu=self.cfg.OCR_GPU,
+                            verbose=False
+                        )
+                        logger.info("EasyOCR ready")
+                    except Exception as e:
+                        logger.warning("Failed to initialize EasyOCR: %s", e)
+                        self._disabled = True
+                        return None
         return self._reader
     
     def _compute_bbox_hash(self, plate_crop: np.ndarray) -> str:
@@ -93,7 +105,7 @@ class PlateOCR:
         
         return True
     
-    def _preprocess_plate(self, plate_crop: np.ndarray) -> np.ndarray:
+    def _preprocess_plate(self, plate_crop: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """
         Preprocess plate image for better OCR accuracy.
         
@@ -101,6 +113,11 @@ class PlateOCR:
         1. Upscale 2x with INTER_CUBIC
         2. Convert to grayscale
         3. Apply adaptive thresholding
+        4. Morphological closing to fill gaps
+        5. Denoise
+        
+        Returns:
+            Tuple of (binary image, inverted binary image) to try both
         """
         # Upscale 2x
         h, w = plate_crop.shape[:2]
@@ -118,39 +135,67 @@ class PlateOCR:
             cv2.THRESH_BINARY, 11, 2
         )
         
-        return binary
+        # Morphological closing to fill gaps in characters
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1))
+        closed = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+        
+        # Denoise
+        denoised = cv2.fastNlMeansDenoising(closed, h=10)
+        
+        # Also prepare inverted version
+        inverted = cv2.bitwise_not(denoised)
+        
+        return denoised, inverted
     
-    def _run_ocr(self, preprocessed: np.ndarray) -> Tuple[Optional[str], Optional[float]]:
-        """Run OCR on preprocessed image."""
+    def _run_ocr_single(self, preprocessed: np.ndarray) -> Tuple[Optional[str], Optional[float]]:
+        """Run OCR on a single preprocessed image."""
+        if self.reader is None:
+            return None, None
+        
+        results = self.reader.readtext(preprocessed)
+        
+        if results:
+            texts = []
+            confs = []
+            for (_, text, conf) in results:
+                if conf > 0.3:
+                    clean_text = text.replace(" ", "").upper()
+                    if len(clean_text) >= 2:
+                        texts.append(clean_text)
+                        confs.append(conf)
+            
+            if texts:
+                combined = "".join(texts)
+                avg_conf = sum(confs) / len(confs)
+                return combined, avg_conf
+        
+        return None, None
+    
+    def _run_ocr(self, preprocessed: np.ndarray, inverted: np.ndarray = None) -> Tuple[Optional[str], Optional[float]]:
+        """Run OCR on preprocessed image, try both normal and inverted."""
         if self.reader is None:
             return None, None
         
         try:
-            results = self.reader.readtext(preprocessed)
+            # Try normal version
+            text1, conf1 = self._run_ocr_single(preprocessed)
             
-            if results:
-                # Combine all detected text
-                texts = []
-                confs = []
-                for (_, text, conf) in results:
-                    # Filter out low confidence results
-                    if conf > 0.3:
-                        # Clean text: remove spaces, convert to uppercase
-                        clean_text = text.replace(" ", "").upper()
-                        if len(clean_text) >= 2:  # At least 2 chars
-                            texts.append(clean_text)
-                            confs.append(conf)
+            # Try inverted version if available
+            if inverted is not None:
+                text2, conf2 = self._run_ocr_single(inverted)
                 
-                if texts:
-                    # Join all text pieces
-                    combined = "".join(texts)
-                    avg_conf = sum(confs) / len(confs)
-                    return combined, avg_conf
+                # Return the one with higher confidence
+                if text2 and (not text1 or (conf2 or 0) > (conf1 or 0)):
+                    return text2, conf2
             
-            return None, None
+            return text1, conf1
             
         except Exception as e:
-            print(f"  ⚠ OCR error: {e}")
+            # Log once per exception type
+            err_type = type(e).__name__
+            if err_type not in self._logged_errors:
+                logger.warning("OCR error (%s): %s", err_type, e)
+                self._logged_errors.add(err_type)
             return None, None
     
     def read_plate(
@@ -170,6 +215,9 @@ class PlateOCR:
         Returns:
             Tuple of (text, confidence) or (None, None) if not readable
         """
+        if self._disabled:
+            return None, None
+            
         if not self.cfg.ENABLE_OCR or not EASYOCR_AVAILABLE:
             return None, None
         
@@ -187,6 +235,15 @@ class PlateOCR:
         
         # Extract plate crop
         x1, y1, x2, y2 = plate_bbox
+        
+        # Validate bbox
+        if x2 <= x1 or y2 <= y1:
+            return None, None
+        
+        h, w = frame.shape[:2]
+        x1, y1 = max(0, x1), max(0, y1)
+        x2, y2 = min(w, x2), min(h, y2)
+        
         plate_crop = frame[y1:y2, x1:x2]
         
         if plate_crop.size == 0:
@@ -198,16 +255,20 @@ class PlateOCR:
             if crop_hash in self._cache:
                 return self._cache[crop_hash]
         
-        # Preprocess
-        preprocessed = self._preprocess_plate(plate_crop)
+        # Preprocess (returns both normal and inverted)
+        preprocessed, inverted = self._preprocess_plate(plate_crop)
         
         # Run OCR with timeout
         try:
-            future = self._executor.submit(self._run_ocr, preprocessed)
+            future = self._executor.submit(self._run_ocr, preprocessed, inverted)
             text, conf = future.result(timeout=self.cfg.OCR_TIMEOUT_MS / 1000.0)
         except FuturesTimeoutError:
             return None, None
-        except Exception:
+        except Exception as e:
+            err_type = type(e).__name__
+            if err_type not in self._logged_errors:
+                logger.warning("OCR error in read_plate (%s): %s", err_type, e)
+                self._logged_errors.add(err_type)
             return None, None
         
         # Update cache

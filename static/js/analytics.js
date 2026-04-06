@@ -42,7 +42,7 @@
     
     async function fetchAnalytics() {
         try {
-            const response = await fetch('/api/analytics');
+            const response = await fetch(`/api/analytics?range=${state.dateRange}`);
             return await response.json();
         } catch (e) {
             console.error('[Analytics] Fetch error:', e);

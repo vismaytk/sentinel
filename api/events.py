@@ -6,6 +6,7 @@ Eliminates polling latency and reduces server load.
 """
 
 import json
+import logging
 import time
 import threading
 from typing import Generator, Callable, Any, Optional
@@ -13,6 +14,8 @@ from typing import Generator, Callable, Any, Optional
 from flask import Response
 
 from config import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class SSEManager:

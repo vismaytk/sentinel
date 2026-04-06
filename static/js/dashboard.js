@@ -193,14 +193,6 @@
         const fpsEl = document.getElementById('fps-value');
         if (fpsEl) fpsEl.textContent = `${data.fps || 0} FPS`;
         
-        // Update vehicle count
-        const vehicleEl = document.getElementById('vehicle-count');
-        if (vehicleEl) vehicleEl.textContent = data.vehicles || 0;
-        
-        // Update plate count
-        const plateEl = document.getElementById('plate-count');
-        if (plateEl) plateEl.textContent = data.plates || 0;
-        
         // Update threat level
         updateThreatLevel(data.threat_level);
         
@@ -216,6 +208,9 @@
         // Update detection log
         updateDetectionLog(data.detections || []);
         
+        // Update alerts
+        updateAlerts(data.alerts || []);
+        
         // Update sparklines
         updateSparklines();
     }
@@ -229,7 +224,7 @@
         switch (level) {
             case 'HIGH':
                 indicator.classList.add('high');
-                indicator.innerHTML = '⚠ HIGH THREAT';
+                indicator.innerHTML = '!! HIGH THREAT';
                 break;
             case 'ELEVATED':
                 indicator.classList.add('elevated');
@@ -270,6 +265,7 @@
             <div class="track-item ${track.class_name === 'military_vehicle' ? 'military' : ''}">
                 <div class="track-id">#${track.track_id}</div>
                 <div class="track-type">${formatClassName(track.class_name)}</div>
+                <div class="track-status ${track.confirmed ? 'confirmed' : 'tentative'}">${track.confirmed ? 'CONFIRMED' : 'TENTATIVE'}</div>
                 <div class="track-conf">${(track.confidence * 100).toFixed(0)}%</div>
             </div>
         `).join('');
@@ -303,8 +299,8 @@
         }
         
         const newHTML = detections.slice(0, 20).map(det => `
-            <div class="log-entry ${det.type === 'military_vehicle' ? 'military' : ''}">
-                <div class="log-entry-id">${det.track_id ? '#' + det.track_id : '—'}</div>
+            <div class="log-entry ${det.type === 'military_vehicle' ? 'military' : ''} ${det.confirmed === false ? 'tentative' : ''}">
+                <div class="log-entry-id">${det.track_id ? '#' + det.track_id : '--'}</div>
                 <div class="log-entry-info">
                     <div class="log-entry-type">${formatClassName(det.type)}</div>
                     ${det.plate ? `<div class="log-entry-plate">${det.plate}</div>` : ''}
@@ -317,6 +313,24 @@
         if (container.innerHTML !== newHTML) {
             container.innerHTML = newHTML;
         }
+    }
+    
+    function updateAlerts(alerts) {
+        const container = document.getElementById('alert-panel');
+        if (!container) return;
+        
+        if (!alerts || alerts.length === 0) {
+            container.innerHTML = '<div class="empty-state"><div class="empty-state-text">No active alerts</div></div>';
+            return;
+        }
+        
+        container.innerHTML = alerts.map(a => `
+            <div class="alert-entry severity-${a.severity.toLowerCase()}" data-alert-id="${a.id}">
+                <span class="alert-badge">${a.severity}</span>
+                <span class="alert-msg">${a.message}</span>
+                <span class="alert-time">${a.time}</span>
+            </div>
+        `).join('');
     }
     
     function formatClassName(name) {
@@ -457,12 +471,25 @@
         }
     }
     
+    // Clear alerts function (called from button)
+    async function clearAlerts() {
+        try {
+            await fetch('/api/alerts/clear', { method: 'POST' });
+            updateAlerts([]);
+        } catch (e) {
+            console.error('[Alerts] Clear error:', e);
+        }
+    }
+    
     // Export for global access
     window.SENTINEL = {
         state,
         connectSSE,
         Sparkline,
     };
+    
+    // Export clearAlerts globally for onclick
+    window.clearAlerts = clearAlerts;
     
     // Start when DOM ready
     if (document.readyState === 'loading') {

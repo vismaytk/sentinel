@@ -5,12 +5,15 @@ Vehicle tracking using SORT algorithm with fallback to simple IoU-based centroid
 Maintains track IDs across frames for consistent identification.
 """
 
+import logging
 import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Tuple
 from collections import deque
 
 from config import get_config
+
+logger = logging.getLogger(__name__)
 
 # Try to import advanced tracking libraries
 try:
@@ -43,6 +46,7 @@ class Track:
     hits: int = 1  # Number of detections matched
     age: int = 0  # Frames since creation
     is_active: bool = True
+    confirmed: bool = False  # Confirmed after TRACK_MIN_HITS frames
     bbox_history: deque = field(default_factory=lambda: deque(maxlen=10))
     
     # Kalman filter state (if available)
@@ -115,13 +119,18 @@ class Track:
         
         return (x1, y1, x2, y2)
     
-    def update(self, bbox: Tuple[int, int, int, int], confidence: float, frame_idx: int):
+    def update(self, bbox: Tuple[int, int, int, int], confidence: float, frame_idx: int,
+               min_hits_for_confirm: int = 3):
         """Update track with new detection."""
         self.bbox = bbox
         self.confidence = confidence
         self.last_seen = frame_idx
         self.hits += 1
         self.bbox_history.append(bbox)
+        
+        # Confirm track after enough hits
+        if self.hits >= min_hits_for_confirm:
+            self.confirmed = True
         
         if self.kf is not None:
             x1, y1, x2, y2 = bbox
@@ -219,7 +228,7 @@ class Tracker:
         else:
             features.append("Greedy")
         
-        print(f"  📊 Tracker initialized: {', '.join(features)}")
+        logger.info("Tracker initialized: %s", ', '.join(features))
     
     def update(self, detections: List) -> List:
         """
@@ -256,7 +265,8 @@ class Tracker:
             for det_idx, track_id in matched:
                 det = detections[det_idx]
                 track = self.tracks[track_id]
-                track.update(det.bbox, det.confidence, self.frame_idx)
+                track.update(det.bbox, det.confidence, self.frame_idx,
+                            min_hits_for_confirm=self.cfg.TRACK_MIN_HITS)
                 det.track_id = track_id
             
             # Create new tracks for unmatched detections
@@ -359,10 +369,32 @@ class Tracker:
                 "age": t.age,
                 "hits": t.hits,
                 "bbox": t.bbox,
+                "confirmed": t.confirmed,
             }
             for t in self.tracks.values()
             if t.is_active
         ]
+    
+    def get_confirmed_tracks(self) -> List[Dict]:
+        """Get list of confirmed tracks only."""
+        return [
+            {
+                "track_id": t.track_id,
+                "class_name": t.class_name,
+                "confidence": round(t.confidence, 2),
+                "age": t.age,
+                "hits": t.hits,
+                "bbox": t.bbox,
+                "confirmed": t.confirmed,
+            }
+            for t in self.tracks.values()
+            if t.is_active and t.confirmed
+        ]
+    
+    def is_track_confirmed(self, track_id: int) -> bool:
+        """Check if a specific track is confirmed."""
+        track = self.tracks.get(track_id)
+        return track is not None and track.confirmed
     
     def reset(self):
         """Reset tracker state."""

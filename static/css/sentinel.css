@@ -663,6 +663,22 @@ h1, h2, h3, h4 {
     }
 }
 
+@keyframes slideOut {
+    from { opacity: 1; transform: translateX(0); }
+    to   { opacity: 0; transform: translateX(20px); }
+}
+
+.config-toggle {
+    display: inline-block;
+    transition: transform 0.25s ease;
+}
+
+.config-toggle.open {
+    display: inline-block;
+    transform: rotate(180deg);
+    transition: transform 0.25s ease;
+}
+
 .log-entry.military {
     border-left-color: var(--accent-threat);
     background: var(--glow-threat);
@@ -697,6 +713,129 @@ h1, h2, h3, h4 {
     font-family: var(--font-mono);
     font-size: 10px;
     color: var(--text-muted);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   ALERT PANEL
+   ═══════════════════════════════════════════════════════════ */
+
+.alert-card {
+    max-height: 180px;
+}
+
+.alert-card .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.clear-alerts-btn {
+    background: transparent;
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+    font-size: 10px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.clear-alerts-btn:hover {
+    border-color: var(--accent-operative);
+    color: var(--accent-operative);
+}
+
+.alert-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 120px;
+    overflow-y: auto;
+}
+
+.alert-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    font-size: 11px;
+}
+
+.alert-entry.severity-critical {
+    border-left-color: var(--accent-threat);
+    background: rgba(255, 68, 68, 0.08);
+}
+
+.alert-entry.severity-warning {
+    border-left-color: var(--accent-warning);
+    background: rgba(255, 136, 0, 0.08);
+}
+
+.alert-entry.severity-info {
+    border-left-color: var(--accent-operative);
+    background: rgba(0, 212, 255, 0.08);
+}
+
+.alert-badge {
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.severity-critical .alert-badge {
+    background: var(--accent-threat);
+    color: #000;
+}
+
+.severity-warning .alert-badge {
+    background: var(--accent-warning);
+    color: #000;
+}
+
+.severity-info .alert-badge {
+    background: var(--accent-operative);
+    color: #000;
+}
+
+.alert-msg {
+    flex: 1;
+    color: var(--text-primary);
+}
+
+.alert-time {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* Track status styles */
+.track-status {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 5px;
+    border-radius: 2px;
+    text-transform: uppercase;
+}
+
+.track-status.confirmed {
+    background: var(--glow-clear);
+    color: var(--accent-clear);
+}
+
+.track-status.tentative {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-muted);
+}
+
+.log-entry.tentative {
+    opacity: 0.6;
 }
 
 

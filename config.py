@@ -72,10 +72,32 @@ class Config:
     OCR_TIMEOUT_MS: int = 200
     OCR_MIN_MOVEMENT_PX: int = 10  # Min bbox movement to re-run OCR
     OCR_COOLDOWN_SEC: float = 2.0  # Min time between OCR on same track
+    OCR_WORKERS: int = 2  # Thread pool workers for parallel OCR
+    
+    # ── Accuracy Enhancement Settings ─────────────────────────────
+    ENABLE_TTA: bool = False  # Test-Time Augmentation (slower, more accurate)
+    MULTI_SCALE_INFERENCE: bool = False  # Run at two scales
+    MULTI_SCALE_OFFSET: int = 160  # Second scale = YOLO_IMGSZ - offset
+    
+    # Platt scaling calibration coefficients per class
+    PLATT_A: Dict[str, float] = field(default_factory=lambda: {
+        "military_vehicle": 2.5,
+        "commercial-vehicle": 2.0,
+    })
+    PLATT_B: Dict[str, float] = field(default_factory=lambda: {
+        "military_vehicle": -1.5,
+        "commercial-vehicle": -1.0,
+    })
     
     # ── SSE Settings ──────────────────────────────────────────────
     SSE_PUSH_INTERVAL: float = 0.15  # ~6-7 pushes/second
     SSE_HEARTBEAT_INTERVAL: float = 3.0  # Keep-alive ping
+    
+    # ── Logging Settings ─────────────────────────────────────────
+    LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = "logs/sentinel.log"
+    LOG_MAX_BYTES: int = 5242880   # 5MB
+    LOG_BACKUP_COUNT: int = 3
     
     # ── Colors (BGR for OpenCV) ───────────────────────────────────
     COLOR_COMMERCIAL: tuple = (0, 230, 118)    # Green

@@ -1,0 +1,404 @@
+{% extends "base.html" %}
+{% block title %}Intelligence Report - SENTINEL{% endblock %}
+
+{% block head %}
+<style>
+    /* CSS variable aliases for report-specific styling */
+    :root {
+        --bg-secondary: var(--bg-surface);
+        --bg-tertiary: var(--bg-elevated);
+        --primary: var(--accent-operative);
+        --border-color: var(--border-subtle);
+    }
+    
+    .report-container {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 2rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+    
+    .report-header {
+        text-align: center;
+        border-bottom: 2px solid var(--primary);
+        padding-bottom: 1.5rem;
+        margin-bottom: 2rem;
+    }
+    
+    .report-title {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: var(--primary);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+        margin-bottom: 0.5rem;
+    }
+    
+    .report-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+    }
+    
+    .report-meta {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1rem;
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+    
+    .report-section {
+        margin-bottom: 2rem;
+    }
+    
+    .section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        border-left: 3px solid var(--primary);
+        padding-left: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+    }
+    
+    .summary-card {
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 1rem;
+        text-align: center;
+    }
+    
+    .summary-value {
+        font-size: 2rem;
+        font-weight: 700;
+        color: var(--primary);
+    }
+    
+    .summary-label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    .threat-indicator {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+    
+    .threat-clear { background: rgba(0, 230, 118, 0.2); color: #00e676; }
+    .threat-elevated { background: rgba(255, 167, 38, 0.2); color: #ffa726; }
+    .threat-high { background: rgba(255, 82, 82, 0.2); color: #ff5252; }
+    
+    .detections-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    
+    .detections-table th,
+    .detections-table td {
+        padding: 0.5rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .detections-table th {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        font-weight: 500;
+    }
+    
+    .type-military { color: #1e90ff; }
+    .type-commercial { color: #00e676; }
+    
+    .plate-text {
+        font-family: 'Courier New', monospace;
+        background: var(--bg-tertiary);
+        padding: 0.125rem 0.25rem;
+        border-radius: 2px;
+    }
+    
+    .timeline-chart {
+        height: 200px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        display: flex;
+        align-items: flex-end;
+        padding: 1rem;
+        gap: 4px;
+    }
+    
+    .timeline-bar {
+        flex: 1;
+        background: var(--primary);
+        border-radius: 2px 2px 0 0;
+        min-height: 2px;
+        position: relative;
+    }
+    
+    .timeline-bar.military {
+        background: #1e90ff;
+    }
+    
+    .snapshots-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.75rem;
+    }
+    
+    .snapshot-thumb {
+        aspect-ratio: 4/3;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        overflow: hidden;
+    }
+    
+    .snapshot-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .snapshot-meta {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        padding: 0.25rem;
+    }
+    
+    .alerts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .alert-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        background: var(--bg-tertiary);
+        border-radius: 4px;
+        border-left: 3px solid var(--border-color);
+    }
+    
+    .alert-item.severity-critical { border-left-color: #ff5252; }
+    .alert-item.severity-warning { border-left-color: #ffa726; }
+    .alert-item.severity-info { border-left-color: #29b6f6; }
+    
+    .alert-time {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+    }
+    
+    .print-controls {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .print-btn {
+        padding: 0.5rem 1rem;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        color: var(--text-primary);
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85rem;
+    }
+    
+    .print-btn:hover {
+        background: var(--bg-tertiary);
+    }
+    
+    @media print {
+        .print-controls, .nav { display: none; }
+        body { background: white; color: black; }
+        .report-container { 
+            border: none; 
+            box-shadow: none;
+            max-width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="print-controls">
+    <button class="print-btn" onclick="window.print()">
+        Print Report
+    </button>
+    <button class="print-btn" onclick="location.reload()">
+        Refresh Data
+    </button>
+</div>
+
+<div class="report-container">
+    <div class="report-header">
+        <div class="report-title">SENTINEL Intelligence Report</div>
+        <div class="report-subtitle">Vehicle Detection &amp; Surveillance Summary</div>
+        <div class="report-meta">
+            <span>Session: {{ session_id }}</span>
+            <span>Generated: {{ generated_at }}</span>
+            <span>Duration: {{ duration }}</span>
+        </div>
+    </div>
+    
+    <div class="report-section">
+        <div class="section-title">Executive Summary</div>
+        <div class="summary-grid">
+            <div class="summary-card">
+                <div class="summary-value">{{ total_vehicles }}</div>
+                <div class="summary-label">Total Detections</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value type-military">{{ military_count }}</div>
+                <div class="summary-label">Military Vehicles</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value type-commercial">{{ commercial_count }}</div>
+                <div class="summary-label">Commercial Vehicles</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value">{{ plates_read }}</div>
+                <div class="summary-label">Plates Read</div>
+            </div>
+        </div>
+        
+        <div style="margin-top: 1rem; text-align: center;">
+            <span class="threat-indicator threat-{{ threat_level|lower }}">
+                Threat Level: {{ threat_level }}
+            </span>
+        </div>
+    </div>
+    
+    {% if timeline %}
+    <div class="report-section">
+        <div class="section-title">Activity Timeline (Last Hour)</div>
+        <div class="timeline-chart">
+            {% for item in timeline %}
+            <div class="timeline-bar" style="height: {{ item.height }}%" title="{{ item.minute }}: {{ item.total }} detections"></div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if alerts %}
+    <div class="report-section">
+        <div class="section-title">Alerts ({{ alerts|length }})</div>
+        <div class="alerts-list">
+            {% for alert in alerts %}
+            <div class="alert-item severity-{{ alert.severity|lower }}">
+                <span class="alert-time">{{ alert.time }}</span>
+                <span>{{ alert.message }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if recent_detections %}
+    <div class="report-section">
+        <div class="section-title">Recent Detections (Last 50)</div>
+        <table class="detections-table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Type</th>
+                    <th>Confidence</th>
+                    <th>Track ID</th>
+                    <th>Plate</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for det in recent_detections %}
+                <tr>
+                    <td>{{ det.time }}</td>
+                    <td class="type-{{ 'military' if det.type == 'military_vehicle' else 'commercial' }}">
+                        {{ 'Military' if det.type == 'military_vehicle' else 'Commercial' }}
+                    </td>
+                    <td>{{ det.conf }}%</td>
+                    <td>{{ det.track_id or '-' }}</td>
+                    <td>
+                        {% if det.plate %}
+                        <span class="plate-text">{{ det.plate }}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    {% if snapshots %}
+    <div class="report-section">
+        <div class="section-title">Evidence Snapshots ({{ snapshots|length }})</div>
+        <div class="snapshots-grid">
+            {% for snap in snapshots %}
+            <div class="snapshot-thumb">
+                <img src="/api/snapshots/thumbnail/{{ snap.snapshot_id }}" alt="Snapshot">
+                <div class="snapshot-meta">
+                    {{ snap.trigger }} | {{ snap.timestamp[:19] }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    
+    {% if top_plates %}
+    <div class="report-section">
+        <div class="section-title">Identified License Plates</div>
+        <table class="detections-table">
+            <thead>
+                <tr>
+                    <th>Plate Number</th>
+                    <th>Vehicle Type</th>
+                    <th>Sightings</th>
+                    <th>Last Seen</th>
+                    <th>Avg Conf</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for plate in top_plates %}
+                <tr>
+                    <td><span class="plate-text">{{ plate.plate_text }}</span></td>
+                    <td class="type-{{ 'military' if plate.vehicle_type == 'military_vehicle' else 'commercial' }}">
+                        {{ 'Military' if plate.vehicle_type == 'military_vehicle' else 'Commercial' }}
+                    </td>
+                    <td>{{ plate.count }}</td>
+                    <td>{{ plate.last_seen[:19] }}</td>
+                    <td>{{ (plate.avg_conf * 100)|round(1) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    
+    <div class="report-section" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+            SENTINEL Vehicle Intelligence Platform &bull; 
+            Classification: INTERNAL USE ONLY &bull;
+            Report generated automatically
+        </div>
+    </div>
+</div>
+{% endblock %}

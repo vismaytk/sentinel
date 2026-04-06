@@ -5,6 +5,7 @@ SQLite persistence layer with WAL mode, connection pooling,
 and background write queue for non-blocking operations.
 """
 
+import logging
 import sqlite3
 import threading
 import queue
@@ -14,6 +15,8 @@ from typing import Dict, List, Optional, Any
 from contextlib import contextmanager
 
 from config import get_config
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -109,29 +112,65 @@ class Database:
         conn.close()
     
     def _write_worker(self) -> None:
-        """Background thread that processes write queue."""
+        """Background thread that processes write queue with batch optimization."""
+        import time as _time
+        
         conn = sqlite3.connect(self.db_path)
         conn.execute("PRAGMA journal_mode=WAL")
         
+        # Batch configuration
+        BATCH_MAX_SIZE = 10
+        BATCH_MAX_WAIT_MS = 100  # 100ms
+        
+        INSERT_SQL = """
+            INSERT INTO detections 
+            (timestamp, vehicle_type, confidence, track_id, plate_text, plate_conf,
+             bbox_x1, bbox_y1, bbox_x2, bbox_y2, session_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        
         while not self._shutdown.is_set() or not self._write_queue.empty():
-            try:
-                # Wait for items with timeout to check shutdown flag
-                item = self._write_queue.get(timeout=0.5)
-                
-                if item is None:  # Shutdown signal
-                    break
+            batch = []
+            session_queries = []  # Non-detection queries (session start/end)
+            deadline = _time.time() + (BATCH_MAX_WAIT_MS / 1000.0)
+            
+            # Collect batch
+            while _time.time() < deadline and len(batch) < BATCH_MAX_SIZE:
+                try:
+                    remaining = max(0.01, deadline - _time.time())
+                    item = self._write_queue.get(timeout=remaining)
                     
-                query, params = item
+                    if item is None:  # Shutdown signal
+                        break
+                    
+                    query, params = item
+                    
+                    # Separate detection inserts from other queries
+                    if "INSERT INTO detections" in query:
+                        batch.append(params)
+                    else:
+                        session_queries.append((query, params))
+                    
+                    self._write_queue.task_done()
+                    
+                except queue.Empty:
+                    break
+            
+            # Execute batch insert if we have detection items
+            if batch:
+                try:
+                    conn.executemany(INSERT_SQL, batch)
+                    conn.commit()
+                except sqlite3.Error as e:
+                    logger.error("DB batch write error: %s", e)
+            
+            # Execute other queries individually
+            for query, params in session_queries:
                 try:
                     conn.execute(query, params)
                     conn.commit()
                 except sqlite3.Error as e:
-                    print(f"[DB] Write error: {e}")
-                    
-                self._write_queue.task_done()
-                
-            except queue.Empty:
-                continue
+                    logger.error("DB write error: %s", e)
         
         conn.close()
     
@@ -204,9 +243,13 @@ class Database:
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
     
-    def get_analytics(self, session_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_analytics(self, session_id: Optional[str] = None, date_range: str = 'all') -> Dict[str, Any]:
         """
         Get comprehensive analytics data.
+        
+        Args:
+            session_id: Optional session filter
+            date_range: 'today' | 'week' | 'all'
         
         Returns dict with:
             - timeline: detections per minute
@@ -218,11 +261,25 @@ class Database:
             - performance: FPS stats (placeholder)
         """
         with self._cursor() as cursor:
-            base_filter = ""
-            params = []
+            # Build date filter
+            date_filter = ""
+            date_params = []
+            if date_range == 'today':
+                cutoff = datetime.now().strftime('%Y-%m-%d')
+                date_filter = " AND date(timestamp) = ?"
+                date_params = [cutoff]
+            elif date_range == 'week':
+                cutoff = (datetime.now() - timedelta(days=7)).isoformat()
+                date_filter = " AND timestamp >= ?"
+                date_params = [cutoff]
+            
+            # Build base filter
             if session_id:
-                base_filter = " WHERE session_id = ?"
-                params = [session_id]
+                base_filter = "WHERE session_id = ?" + date_filter
+                params = [session_id] + date_params
+            else:
+                base_filter = ("WHERE 1=1" + date_filter) if date_filter else ""
+                params = date_params
             
             # Timeline (last 60 minutes in 1-min buckets)
             cursor.execute(f"""
@@ -286,7 +343,16 @@ class Database:
             heatmap = [{'day': days[int(row['day'])], 'hour': int(row['hour']), 'count': row['count']} 
                       for row in cursor.fetchall()]
             
-            # Top plates
+            # Top plates - clean filter construction
+            top_plates_filter = "WHERE plate_text IS NOT NULL AND plate_text != ''"
+            top_plates_params = []
+            if session_id:
+                top_plates_filter += " AND session_id = ?"
+                top_plates_params.append(session_id)
+            if date_filter:
+                top_plates_filter += date_filter
+                top_plates_params.extend(date_params)
+            
             cursor.execute(f"""
                 SELECT 
                     plate_text,
@@ -295,12 +361,11 @@ class Database:
                     MAX(timestamp) as last_seen,
                     AVG(plate_conf) as avg_conf
                 FROM detections
-                WHERE plate_text IS NOT NULL AND plate_text != ''
-                {base_filter.replace('WHERE', 'AND') if base_filter else ''}
+                {top_plates_filter}
                 GROUP BY plate_text
                 ORDER BY count DESC
                 LIMIT 20
-            """, params)
+            """, top_plates_params)
             top_plates = [dict(row) for row in cursor.fetchall()]
             
             return {
@@ -366,6 +431,23 @@ class Database:
         query = "UPDATE sessions SET end_time = ? WHERE id = ?"
         params = (datetime.now().isoformat(), session_id)
         self._write_queue.put((query, params))
+    
+    def verify_integrity(self) -> Dict[str, Any]:
+        """
+        Run PRAGMA integrity_check on database.
+        
+        Returns:
+            Dict with 'ok' bool and 'details' list.
+            Never raises — system must keep running even if check fails.
+        """
+        try:
+            with self._cursor() as cursor:
+                cursor.execute("PRAGMA integrity_check")
+                results = [row[0] for row in cursor.fetchall()]
+                ok = results == ["ok"]
+                return {"ok": ok, "details": results}
+        except Exception as e:
+            return {"ok": False, "details": [str(e)]}
     
     def close(self) -> None:
         """Shutdown database gracefully, flushing write queue."""
