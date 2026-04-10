@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Optional, Generator, Dict, Any, Tuple, List
 from uuid import uuid4
 
-from flask import Blueprint, render_template, jsonify, request, Response
+from flask import Blueprint, render_template, jsonify, request, Response, make_response
 
 from config import get_config, update_config
 from core import (
@@ -40,6 +40,8 @@ _state = {
         "fps": 0.0,
         "military_count": 0,
         "commercial_count": 0,
+        "gun_count": 0,
+        "grenade_count": 0,
         "detections": [],
         "camera_status": "connecting",
         "alerts": [],
@@ -55,7 +57,7 @@ _detection_queue: queue.Queue = queue.Queue()
 
 # Required keys for detection entry validation
 REQUIRED_DETECTION_KEYS = {"timestamp", "vehicle_type", "confidence", "session_id"}
-VALID_VEHICLE_TYPES = {"commercial-vehicle", "military_vehicle"}
+VALID_VEHICLE_TYPES = {"commercial-vehicle", "military_vehicle", "gun", "Grenade"}
 
 # TurboJPEG (optional, faster encoding)
 _turbo_jpeg = None
@@ -194,6 +196,12 @@ class DetectionWorker:
                         frame, det, "military", session_id
                     )
                 
+                # Capture on weapon detection
+                if det.vehicle_type in ("gun", "Grenade"):
+                    snapshot_manager.capture(
+                        frame, det, "weapon", session_id
+                    )
+                
                 # Capture on plate read
                 if det.plate_text:
                     snapshot_manager.capture(
@@ -318,15 +326,23 @@ def get_stats() -> dict:
         # Adaptive frame skip info
         stats["auto_detect_n"] = _state.get("auto_detect_n", cfg.DETECT_EVERY_N)
         
-        # Calculate threat level
+        # Calculate threat level (weapons escalate to HIGH)
         mil = stats.get("military_count", 0)
+        guns = stats.get("gun_count", 0)
+        grenades = stats.get("grenade_count", 0)
         total = stats.get("vehicles", 0)
-        if mil > 5 or (total > 0 and mil / total > 0.3):
+        weapon_detected = (guns + grenades) > 0
+        
+        if weapon_detected or mil > 5 or (total > 0 and mil / max(total, 1) > 0.3):
             stats["threat_level"] = "HIGH"
-        elif mil > 2 or (total > 0 and mil / total > 0.15):
+        elif mil > 2 or (total > 0 and mil / max(total, 1) > 0.15):
             stats["threat_level"] = "ELEVATED"
         else:
             stats["threat_level"] = "CLEAR"
+        
+        # Add weapon counts to stats
+        stats["gun_count"] = _state["stats"].get("gun_count", 0)
+        stats["grenade_count"] = _state["stats"].get("grenade_count", 0)
     
     # Get alerts from alert engine
     try:
@@ -390,6 +406,10 @@ def update_stats(
             if is_confirmed:
                 if det.vehicle_type == "military_vehicle":
                     _state["stats"]["military_count"] += 1
+                elif det.vehicle_type == "gun":
+                    _state["stats"]["gun_count"] += 1
+                elif det.vehicle_type == "Grenade":
+                    _state["stats"]["grenade_count"] += 1
                 else:
                     _state["stats"]["commercial_count"] += 1
                 
@@ -418,6 +438,8 @@ def update_stats(
             "vehicles": _state["stats"]["vehicles"],
             "military_count": _state["stats"]["military_count"],
             "commercial_count": _state["stats"]["commercial_count"],
+            "gun_count": _state["stats"]["gun_count"],
+            "grenade_count": _state["stats"]["grenade_count"],
             "plates": _state["stats"]["plates"],
             "fps": fps,
         }
@@ -614,45 +636,48 @@ def analytics():
 @bp.route('/report')
 def report():
     """Intelligence report page with server-side rendering."""
-    from datetime import timedelta
-    
-    # Get current stats
+    return render_template('report.html', **_build_report_context())
+
+
+def _build_report_context() -> Dict[str, Any]:
+    """Build report context for both HTML and PDF report endpoints."""
     stats = get_stats()
-    
-    # Get analytics data
     db = get_database()
     analytics_data = db.get_analytics(session_id=_state["session_id"])
-    
-    # Get recent snapshots
     snapshots = get_snapshot_manager().get_snapshots(limit=8)
-    
-    # Get alerts
     alerts = get_alert_engine().get_alerts(limit=10)
-    
-    # Calculate duration
+
     duration = "N/A"
     if _state["session_start"]:
         delta = datetime.now() - _state["session_start"]
         hours, remainder = divmod(int(delta.total_seconds()), 3600)
         minutes, seconds = divmod(remainder, 60)
         duration = f"{hours}h {minutes}m {seconds}s"
-    
-    # Process timeline for chart
+
     timeline = []
     if analytics_data.get("timeline"):
         max_count = max(
-            (t.get("commercial", 0) + t.get("military", 0)) 
+            (
+                t.get("commercial", 0)
+                + t.get("military", 0)
+                + t.get("gun", 0)
+                + t.get("grenade", 0)
+            )
             for t in analytics_data["timeline"]
         ) or 1
-        for t in reversed(analytics_data["timeline"][:30]):  # Last 30 minutes
-            total = t.get("commercial", 0) + t.get("military", 0)
+        for t in reversed(analytics_data["timeline"][:30]):
+            total = (
+                t.get("commercial", 0)
+                + t.get("military", 0)
+                + t.get("gun", 0)
+                + t.get("grenade", 0)
+            )
             timeline.append({
                 "minute": t.get("minute", ""),
                 "total": total,
                 "height": int((total / max_count) * 100) if max_count > 0 else 0,
             })
-    
-    # Prepare recent detections
+
     recent_detections = []
     for det in stats.get("detections", [])[:50]:
         recent_detections.append({
@@ -662,22 +687,119 @@ def report():
             "track_id": det.get("track_id"),
             "plate": det.get("plate"),
         })
-    
-    return render_template('report.html',
-        session_id=stats.get("session_id", ""),
-        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        duration=duration,
-        total_vehicles=stats.get("military_count", 0) + stats.get("commercial_count", 0),
-        military_count=stats.get("military_count", 0),
-        commercial_count=stats.get("commercial_count", 0),
-        plates_read=stats.get("plates", 0),
-        threat_level=stats.get("threat_level", "CLEAR"),
-        timeline=timeline,
-        alerts=alerts,
-        recent_detections=recent_detections,
-        snapshots=snapshots,
-        top_plates=analytics_data.get("top_plates", [])[:10],
+
+    return {
+        "session_id": stats.get("session_id", ""),
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "duration": duration,
+        "total_vehicles": stats.get("military_count", 0) + stats.get("commercial_count", 0),
+        "military_count": stats.get("military_count", 0),
+        "commercial_count": stats.get("commercial_count", 0),
+        "gun_count": stats.get("gun_count", 0),
+        "grenade_count": stats.get("grenade_count", 0),
+        "plates_read": stats.get("plates", 0),
+        "threat_level": stats.get("threat_level", "CLEAR"),
+        "timeline": timeline,
+        "alerts": alerts,
+        "recent_detections": recent_detections,
+        "snapshots": snapshots,
+        "top_plates": analytics_data.get("top_plates", [])[:10],
+    }
+
+
+def _escape_pdf_text(text: str) -> str:
+    """Escape text for a PDF text object."""
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _build_simple_pdf(lines: List[str]) -> bytes:
+    """Build a simple multi-page PDF from plain text lines."""
+    page_lines = 44
+    chunks = [lines[i:i + page_lines] for i in range(0, len(lines), page_lines)] or [[]]
+    objects: List[bytes] = [
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"",  # /Pages placeholder
+    ]
+    font_id = 1
+    pages_id = 2
+    page_ids: List[int] = []
+
+    def add_obj(content: str) -> int:
+        objects.append(content.encode("latin-1"))
+        return len(objects)
+
+    for chunk in chunks:
+        stream_lines = ["BT", "/F1 10 Tf", "50 800 Td", "14 TL"]
+        for line in chunk:
+            stream_lines.append(f"({_escape_pdf_text(line[:160])}) Tj")
+            stream_lines.append("T*")
+        stream_lines.append("ET")
+        stream_data = "\n".join(stream_lines) + "\n"
+        content_id = add_obj(
+            f"<< /Length {len(stream_data.encode('latin-1'))} >>\nstream\n{stream_data}endstream"
+        )
+        page_id = add_obj(
+            f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 612 842] "
+            f"/Resources << /Font << /F1 {font_id} 0 R >> >> /Contents {content_id} 0 R >>"
+        )
+        page_ids.append(page_id)
+
+    kids = " ".join(f"{pid} 0 R" for pid in page_ids) or ""
+    objects[pages_id - 1] = f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>".encode("latin-1")
+    catalog_id = add_obj(f"<< /Type /Catalog /Pages {pages_id} 0 R >>")
+
+    pdf = b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n"
+    offsets = [0]
+    for i, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf += f"{i} 0 obj\n".encode("ascii") + obj + b"\nendobj\n"
+
+    xref_pos = len(pdf)
+    pdf += f"xref\n0 {len(objects) + 1}\n".encode("ascii")
+    pdf += b"0000000000 65535 f \n"
+    for off in offsets[1:]:
+        pdf += f"{off:010d} 00000 n \n".encode("ascii")
+    pdf += (
+        f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+        f"startxref\n{xref_pos}\n%%EOF\n"
+    ).encode("ascii")
+    return pdf
+
+
+@bp.route('/report/pdf')
+def report_pdf():
+    """Download a non-empty intelligence report PDF."""
+    ctx = _build_report_context()
+    lines = [
+        "SENTINEL Intelligence Report",
+        f"Generated: {ctx['generated_at']}",
+        f"Session: {ctx['session_id']}",
+        f"Duration: {ctx['duration']}",
+        "",
+        "Executive Summary",
+        f"- Total Vehicle Detections: {ctx['total_vehicles']}",
+        f"- Commercial Vehicles: {ctx['commercial_count']}",
+        f"- Military Vehicles: {ctx['military_count']}",
+        f"- Guns Detected: {ctx['gun_count']}",
+        f"- Grenades Detected: {ctx['grenade_count']}",
+        f"- Plates Read: {ctx['plates_read']}",
+        f"- Threat Level: {ctx['threat_level']}",
+        "",
+        "Recent Detections",
+    ]
+    for det in ctx["recent_detections"][:50]:
+        lines.append(
+            f"{det.get('time', '')} | {det.get('type', '')} | "
+            f"{det.get('conf', 0)}% | track={det.get('track_id') or '-'} | plate={det.get('plate') or '-'}"
+        )
+
+    pdf_bytes = _build_simple_pdf(lines)
+    response = make_response(pdf_bytes)
+    response.headers["Content-Type"] = "application/pdf"
+    response.headers["Content-Disposition"] = (
+        f"attachment; filename=sentinel-report-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf"
     )
+    return response
 
 
 @bp.route('/video_feed')
@@ -714,6 +836,12 @@ def get_config_route():
         "detect_every_n": cfg.DETECT_EVERY_N,
         "enable_ocr": cfg.ENABLE_OCR,
         "enable_tracking": cfg.ENABLE_TRACKING,
+        "enable_gun_detection": cfg.ENABLE_GUN_DETECTION,
+        "enable_grenade_detection": cfg.ENABLE_GRENADE_DETECTION,
+        "weapon_conf": {
+            "gun": cfg.class_conf.get("gun", 0.45),
+            "Grenade": cfg.class_conf.get("Grenade", 0.45),
+        },
     })
 
 
@@ -774,6 +902,24 @@ def set_config():
     # Toggle tracking
     if "enable_tracking" in data:
         update_config(ENABLE_TRACKING=bool(data["enable_tracking"]))
+    
+    # Toggle gun detection
+    if "enable_gun_detection" in data:
+        update_config(ENABLE_GUN_DETECTION=bool(data["enable_gun_detection"]))
+    
+    # Toggle grenade detection
+    if "enable_grenade_detection" in data:
+        update_config(ENABLE_GRENADE_DETECTION=bool(data["enable_grenade_detection"]))
+    
+    # Weapon confidence settings
+    if "weapon_conf" in data:
+        for cls_name, val in data["weapon_conf"].items():
+            if cls_name in ("gun", "Grenade") and cls_name in cfg.class_conf:
+                try:
+                    conf = max(0.05, min(0.99, float(val)))
+                    cfg.class_conf[cls_name] = conf
+                except (ValueError, TypeError):
+                    errors.append(f"Invalid value for {cls_name}")
     
     if errors:
         return jsonify({"status": "partial", "errors": errors}), 400
@@ -882,7 +1028,9 @@ def health():
         "detections": {
             "military": military,
             "commercial": commercial,
-            "total": military + commercial,
+            "gun": _state["stats"].get("gun_count", 0),
+            "grenade": _state["stats"].get("grenade_count", 0),
+            "total": military + commercial + _state["stats"].get("gun_count", 0) + _state["stats"].get("grenade_count", 0),
         },
     })
 
@@ -1143,10 +1291,14 @@ def api_get_snapshot_image(snapshot_id):
         return jsonify({"error": "Snapshot not found"}), 404
     
     image_path = snapshot.get('image_path')
-    if not image_path or not os.path.isfile(image_path):
+    if not image_path:
         return jsonify({"error": "Image file not found"}), 404
     
-    return send_file(image_path, mimetype='image/jpeg')
+    abs_path = os.path.abspath(image_path)
+    if not os.path.isfile(abs_path):
+        return jsonify({"error": "Image file not found"}), 404
+    
+    return send_file(abs_path, mimetype='image/jpeg')
 
 
 @bp.route('/api/snapshots/thumbnail/<snapshot_id>')
@@ -1159,7 +1311,11 @@ def api_get_snapshot_thumbnail(snapshot_id):
         return jsonify({"error": "Snapshot not found"}), 404
     
     thumb_path = snapshot.get('thumbnail_path')
-    if not thumb_path or not os.path.isfile(thumb_path):
+    if not thumb_path:
         return jsonify({"error": "Thumbnail not found"}), 404
     
-    return send_file(thumb_path, mimetype='image/jpeg')
+    abs_path = os.path.abspath(thumb_path)
+    if not os.path.isfile(abs_path):
+        return jsonify({"error": "Thumbnail not found"}), 404
+    
+    return send_file(abs_path, mimetype='image/jpeg')

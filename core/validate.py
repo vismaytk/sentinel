@@ -105,6 +105,22 @@ class SystemValidator:
                 size_mb > 1.0,
                 f"Model file suspiciously small: {size_mb:.1f}MB"
             )
+        
+        # Check vehicle model has expected 4 classes
+        if vehicle_exists:
+            try:
+                from ultralytics import YOLO as _YOLO
+                m = _YOLO(vehicle_path)
+                expected = {0, 1, 2, 3}
+                actual = set(m.names.keys())
+                self.check(
+                    "vehicle.pt has 4 classes",
+                    expected.issubset(actual),
+                    f"Expected classes 0-3, got: {actual}",
+                    "WARN"
+                )
+            except Exception:
+                pass
     
     def _check_camera_reachable(self):
         """Check if camera source is accessible."""

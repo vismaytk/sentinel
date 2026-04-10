@@ -71,7 +71,7 @@ SENTINEL provides a sophisticated web-based dashboard for monitoring vehicle act
 | Feature | Description |
 |---------|-------------|
 | 🎥 **Live Video Feed** | Real-time MJPEG stream with detection overlays |
-| 🚗 **Vehicle Detection** | YOLOv8-powered detection of commercial & military vehicles |
+| 🚗 **Vehicle Detection** | YOLOv8-powered detection of commercial vehicles, military vehicles, guns, and grenades (classes 0-3) |
 | 🔢 **Object Tracking** | SORT algorithm with persistent track IDs and confirmation |
 | 📝 **Plate OCR** | EasyOCR-based license plate text recognition |
 | 🚨 **Alert System** | Configurable rules with cooldown and severity levels |
@@ -164,6 +164,7 @@ The server will display a startup banner and be available at:
 | 🖥️ Dashboard | http://localhost:5000 |
 | 📊 Analytics | http://localhost:5000/analytics |
 | 📄 Report | http://localhost:5000/report |
+| 📥 Report PDF | http://localhost:5000/report/pdf |
 | 💚 Health Check | http://localhost:5000/health |
 
 ### Detection Pipeline
@@ -202,6 +203,10 @@ All settings are in `config.py`:
 | `OCR_WORKERS` | `2` | Parallel OCR worker threads |
 | `class_conf["commercial-vehicle"]` | `0.70` | Commercial vehicle confidence |
 | `class_conf["military_vehicle"]` | `0.30` | Military vehicle confidence |
+| `ENABLE_GUN_DETECTION` | `False` | Enable gun detection (class 2) |
+| `ENABLE_GRENADE_DETECTION` | `False` | Enable grenade detection (class 3) |
+| `class_conf["gun"]` | `0.45` | Gun detection confidence |
+| `class_conf["Grenade"]` | `0.45` | Grenade detection confidence |
 | `plate_conf["License_Plate"]` | `0.30` | Plate detection confidence |
 
 > 💡 **Tip**: Confidence thresholds can be adjusted live via the dashboard config panel.
@@ -217,6 +222,7 @@ All settings are in `config.py`:
 | `/` | GET | Live dashboard |
 | `/analytics` | GET | Analytics page |
 | `/report` | GET | Intelligence report page |
+| `/report/pdf` | GET | Download intelligence report as PDF |
 | `/video_feed` | GET | MJPEG video stream |
 | `/stream` | GET | SSE real-time stats |
 | `/stats` | GET | JSON stats snapshot |
@@ -335,6 +341,7 @@ sentinel/
 | **Browser Support** | SSE requires modern browsers (no IE) |
 | **Memory Usage** | EasyOCR uses ~500MB RAM when active |
 | **Model Files** | Not included in repo (download separately) |
+| **Weapon Classes Off by Default** | Gun/Grenade detection disabled at startup — enable via dashboard or config.py |
 
 ---
 

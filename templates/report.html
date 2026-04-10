@@ -121,7 +121,10 @@
     }
     
     .type-military { color: #1e90ff; }
-    .type-commercial { color: #00e676; }
+    .type-commercial { color: #00ff88; }
+    .type-gun { color: #ff2d55; }
+    .type-grenade { color: #ff9f1a; }
+    .type-weapon { color: #ff2d55; }
     
     .plate-text {
         font-family: 'Courier New', monospace;
@@ -149,9 +152,9 @@
         position: relative;
     }
     
-    .timeline-bar.military {
-        background: #1e90ff;
-    }
+    .timeline-bar.military { background: #1e90ff; }
+    .timeline-bar.gun { background: #ff2d55; }
+    .timeline-bar.grenade { background: #ff9f1a; }
     
     .snapshots-grid {
         display: grid;
@@ -225,23 +228,157 @@
         background: var(--bg-tertiary);
     }
     
+    /* Responsive Report Styles */
+    @media (max-width: 768px) {
+        .report-container {
+            padding: 1rem;
+            border-radius: 0;
+            border-left: none;
+            border-right: none;
+        }
+        
+        .report-title {
+            font-size: 1.3rem;
+            letter-spacing: 1px;
+        }
+        
+        .report-meta {
+            flex-direction: column;
+            gap: 0.25rem;
+            text-align: center;
+        }
+        
+        .summary-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .summary-value {
+            font-size: 1.5rem;
+        }
+        
+        .summary-label {
+            font-size: 0.65rem;
+        }
+        
+        .snapshots-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+        
+        .timeline-chart {
+            height: 150px;
+            padding: 0.5rem;
+        }
+        
+        .detections-table {
+            font-size: 0.75rem;
+        }
+        
+        .detections-table th,
+        .detections-table td {
+            padding: 0.35rem 0.25rem;
+        }
+        
+        .print-controls {
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .print-btn {
+            width: 100%;
+            text-align: center;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .report-container {
+            padding: 0.75rem;
+        }
+        
+        .report-title {
+            font-size: 1.1rem;
+        }
+        
+        .report-subtitle {
+            font-size: 0.75rem;
+        }
+        
+        .section-title {
+            font-size: 0.95rem;
+        }
+        
+        .summary-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        
+        .summary-card {
+            padding: 0.75rem 0.5rem;
+        }
+        
+        .summary-value {
+            font-size: 1.25rem;
+        }
+        
+        .summary-label {
+            font-size: 0.6rem;
+        }
+        
+        .detections-table {
+            display: block;
+            overflow-x: auto;
+        }
+        
+        .snapshots-grid {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .alert-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.25rem;
+        }
+    }
+    
     @media print {
-        .print-controls, .nav { display: none; }
-        body { background: white; color: black; }
-        .report-container { 
-            border: none; 
-            box-shadow: none;
-            max-width: 100%;
+        .print-controls, .nav, .header { display: none !important; }
+        html, body {
+            background: #fff !important;
+            color: #000 !important;
+        }
+        * {
+            color: #000 !important;
+            text-shadow: none !important;
+            box-shadow: none !important;
+            background-image: none !important;
+        }
+        .report-container {
+            border: none !important;
+            box-shadow: none !important;
+            max-width: 100% !important;
+            background: #fff !important;
+        }
+        .summary-card,
+        .timeline-chart,
+        .alert-item,
+        .snapshot-thumb,
+        .plate-text {
+            background: #fff !important;
+            border-color: #bbb !important;
         }
     }
 </style>
 {% endblock %}
 
 {% block content %}
+<div style="padding-top: calc(var(--header-height) + 16px); padding-left: 16px; padding-right: 16px; padding-bottom: 16px;">
 <div class="print-controls">
     <button class="print-btn" onclick="window.print()">
         Print Report
     </button>
+    <a class="print-btn" href="/report/pdf" style="text-decoration: none;">
+        Download PDF
+    </a>
     <button class="print-btn" onclick="location.reload()">
         Refresh Data
     </button>
@@ -263,7 +400,7 @@
         <div class="summary-grid">
             <div class="summary-card">
                 <div class="summary-value">{{ total_vehicles }}</div>
-                <div class="summary-label">Total Detections</div>
+                <div class="summary-label">Vehicle Detections</div>
             </div>
             <div class="summary-card">
                 <div class="summary-value type-military">{{ military_count }}</div>
@@ -279,6 +416,27 @@
             </div>
         </div>
         
+        {% if gun_count > 0 or grenade_count > 0 %}
+        <div class="summary-grid" style="margin-top: 1rem;">
+            <div class="summary-card" style="border-color: #ff2d55;">
+                <div class="summary-value type-gun">{{ gun_count }}</div>
+                <div class="summary-label">Guns Detected</div>
+            </div>
+            <div class="summary-card" style="border-color: #ff9f1a;">
+                <div class="summary-value type-grenade">{{ grenade_count }}</div>
+                <div class="summary-label">Grenades Detected</div>
+            </div>
+            <div class="summary-card" style="border-color: #00d4ff;">
+                <div class="summary-value" style="color: #00d4ff;">{{ gun_count + grenade_count }}</div>
+                <div class="summary-label">Total Weapon Threats</div>
+            </div>
+            <div class="summary-card">
+                <div class="summary-value">{{ total_vehicles + gun_count + grenade_count }}</div>
+                <div class="summary-label">All Detections</div>
+            </div>
+        </div>
+        {% endif %}
+        
         <div style="margin-top: 1rem; text-align: center;">
             <span class="threat-indicator threat-{{ threat_level|lower }}">
                 Threat Level: {{ threat_level }}
@@ -291,7 +449,7 @@
         <div class="section-title">Activity Timeline (Last Hour)</div>
         <div class="timeline-chart">
             {% for item in timeline %}
-            <div class="timeline-bar" style="height: {{ item.height }}%" title="{{ item.minute }}: {{ item.total }} detections"></div>
+            <div class="timeline-bar" data-height="{{ item.height }}" title="{{ item.minute }}: {{ item.total }} detections"></div>
             {% endfor %}
         </div>
     </div>
@@ -328,8 +486,11 @@
                 {% for det in recent_detections %}
                 <tr>
                     <td>{{ det.time }}</td>
-                    <td class="type-{{ 'military' if det.type == 'military_vehicle' else 'commercial' }}">
-                        {{ 'Military' if det.type == 'military_vehicle' else 'Commercial' }}
+                    <td class="type-{{ 'military' if det.type == 'military_vehicle' else ('gun' if det.type == 'gun' else ('grenade' if det.type == 'Grenade' else 'commercial')) }}">
+                        {% if det.type == 'military_vehicle' %}Military
+                        {% elif det.type == 'gun' %}Gun
+                        {% elif det.type == 'Grenade' %}Grenade
+                        {% else %}Commercial{% endif %}
                     </td>
                     <td>{{ det.conf }}%</td>
                     <td>{{ det.track_id or '-' }}</td>
@@ -401,4 +562,11 @@
         </div>
     </div>
 </div>
+</div>
+<script>
+document.querySelectorAll('.timeline-bar[data-height]').forEach((bar) => {
+    const h = Number(bar.getAttribute('data-height')) || 0;
+    bar.style.height = `${Math.max(2, Math.min(100, h))}%`;
+});
+</script>
 {% endblock %}

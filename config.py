@@ -25,18 +25,22 @@ class Config:
     
     # ── Model Settings ────────────────────────────────────────────
     VEHICLE_MODEL_PATH: str = "models/vehicle.pt"
-    PLATE_MODEL_PATH: str = "models/license_plate.pt"
+    PLATE_MODEL_PATH: str = "models/license_plate1.pt"
     
     # ── Inference Settings ────────────────────────────────────────
     INFERENCE_WIDTH: int = 640
     YOLO_IMGSZ: int = 480
     DETECT_EVERY_N: int = 2
-    TARGET_CLASSES: tuple = (0, 1)  # commercial-vehicle, military_vehicle
+    TARGET_CLASSES: tuple = (0, 1, 2, 3)  # commercial-vehicle, military_vehicle, gun, grenade
+    
+    # Weapon Detection (off by default)
+    ENABLE_GUN_DETECTION: bool = True
+    ENABLE_GRENADE_DETECTION: bool = True
     
     # ── NMS Settings (per-class) ──────────────────────────────────
     NMS_IOU_MILITARY: float = 0.35  # Lower = less overlap for close targets
-    NMS_IOU_COMMERCIAL: float = 0.50
-    NMS_IOU_DEFAULT: float = 0.45
+    NMS_IOU_COMMERCIAL: float = 0.05
+    NMS_IOU_DEFAULT: float = 0.25
     
     # ── Streaming Settings ────────────────────────────────────────
     JPEG_QUALITY: int = 65
@@ -47,11 +51,13 @@ class Config:
     # These are mutable and can be updated via /config endpoint
     class_conf: Dict[str, float] = field(default_factory=lambda: {
         "commercial-vehicle": 0.70,
-        "military_vehicle": 0.30,
+        "military_vehicle": 0.50,
+        "gun": 0.60,
+        "Grenade": 0.60,
     })
     
     plate_conf: Dict[str, float] = field(default_factory=lambda: {
-        "License_Plate": 0.30,
+        "License_Plate": 0.50,
     })
     
     # ── Database Settings ─────────────────────────────────────────
@@ -60,7 +66,7 @@ class Config:
     DB_CLEANUP_DAYS: int = 7
     
     # ── Tracking Settings ─────────────────────────────────────────
-    ENABLE_TRACKING: bool = True
+    ENABLE_TRACKING: bool = False
     TRACK_MAX_AGE: int = 30  # Frames before a track is dropped
     TRACK_MIN_HITS: int = 3  # Min detections before track is confirmed
     TRACK_IOU_THRESHOLD: float = 0.3
@@ -83,10 +89,14 @@ class Config:
     PLATT_A: Dict[str, float] = field(default_factory=lambda: {
         "military_vehicle": 2.5,
         "commercial-vehicle": 2.0,
+        "gun": 2.2,
+        "Grenade": 2.2,
     })
     PLATT_B: Dict[str, float] = field(default_factory=lambda: {
         "military_vehicle": -1.5,
         "commercial-vehicle": -1.0,
+        "gun": -1.2,
+        "Grenade": -1.2,
     })
     
     # ── SSE Settings ──────────────────────────────────────────────
@@ -100,18 +110,31 @@ class Config:
     LOG_BACKUP_COUNT: int = 3
     
     # ── Colors (BGR for OpenCV) ───────────────────────────────────
-    COLOR_COMMERCIAL: tuple = (0, 230, 118)    # Green
-    COLOR_MILITARY: tuple = (30, 144, 255)     # Dodger Blue (threat)
-    COLOR_PLATE: tuple = (0, 255, 255)         # Yellow
+    COLOR_COMMERCIAL: tuple = (136, 255, 0)    # #00ff88
+    COLOR_MILITARY: tuple = (255, 144, 30)     # #1e90ff
+    COLOR_PLATE: tuple = (0, 212, 255)         # #ffd400
     COLOR_TEXT_BG: tuple = (0, 0, 0)           # Black
+    COLOR_GUN: tuple = (85, 45, 255)           # #ff2d55
+    COLOR_GRENADE: tuple = (26, 159, 255)      # #ff9f1a
     
     def get_class_color(self, class_name: str) -> tuple:
         """Get BGR color for a vehicle class."""
         colors = {
             "commercial-vehicle": self.COLOR_COMMERCIAL,
             "military_vehicle": self.COLOR_MILITARY,
+            "gun": self.COLOR_GUN,
+            "Grenade": self.COLOR_GRENADE,
         }
         return colors.get(class_name, (0, 255, 0))
+    
+    def get_active_classes(self) -> tuple:
+        """Return active YOLO class indices based on enabled toggles."""
+        classes = [0, 1]  # Always detect vehicles
+        if self.ENABLE_GUN_DETECTION:
+            classes.append(2)
+        if self.ENABLE_GRENADE_DETECTION:
+            classes.append(3)
+        return tuple(classes)
     
     def get_nms_iou(self, class_name: str) -> float:
         """Get NMS IoU threshold for a vehicle class."""

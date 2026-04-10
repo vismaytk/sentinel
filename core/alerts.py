@@ -73,6 +73,20 @@ class AlertEngine:
             cooldown_sec=60.0,
             message="Plate successfully read from military vehicle"
         ),
+        AlertRule(
+            "gun_detected",
+            "gun_count > 0",
+            "CRITICAL",
+            cooldown_sec=30.0,
+            message="Gun detected in frame"
+        ),
+        AlertRule(
+            "grenade_detected",
+            "grenade_count > 0",
+            "CRITICAL",
+            cooldown_sec=30.0,
+            message="Grenade detected in frame"
+        ),
     ]
     
     def __init__(self, rules: Optional[List[AlertRule]] = None):
@@ -108,6 +122,9 @@ class AlertEngine:
             "vehicles": total,
             "military_count": stats.get("military_count", 0),
             "commercial_count": stats.get("commercial_count", 0),
+            "gun_count": stats.get("gun_count", 0),
+            "grenade_count": stats.get("grenade_count", 0),
+            "weapon_count": stats.get("gun_count", 0) + stats.get("grenade_count", 0),
             "military_ratio": stats.get("military_count", 0) / max(total, 1),
             "fps": stats.get("fps", 0),
             "plates": stats.get("plates", 0),

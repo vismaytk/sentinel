@@ -205,6 +205,9 @@
         // Update detection counts
         updateDetectionCounts(data);
         
+        // Update weapon counts
+        updateWeaponCounts(data);
+        
         // Update detection log
         updateDetectionLog(data.detections || []);
         
@@ -261,20 +264,26 @@
             return;
         }
         
-        container.innerHTML = tracks.slice(0, 10).map(track => `
-            <div class="track-item ${track.class_name === 'military_vehicle' ? 'military' : ''}">
+        container.innerHTML = tracks.slice(0, 10).map(track => {
+            const trackClass = track.class_name === 'military_vehicle' ? 'military' :
+                               track.class_name === 'gun' ? 'weapon-gun' :
+                               track.class_name === 'Grenade' ? 'weapon-grenade' : '';
+            return `
+            <div class="track-item ${trackClass}">
                 <div class="track-id">#${track.track_id}</div>
                 <div class="track-type">${formatClassName(track.class_name)}</div>
                 <div class="track-status ${track.confirmed ? 'confirmed' : 'tentative'}">${track.confirmed ? 'CONFIRMED' : 'TENTATIVE'}</div>
                 <div class="track-conf">${(track.confidence * 100).toFixed(0)}%</div>
             </div>
-        `).join('');
+        `}).join('');
     }
     
     function updateDetectionCounts(data) {
         const commercial = data.commercial_count || 0;
         const military = data.military_count || 0;
-        const total = commercial + military || 1;
+        const guns = data.gun_count || 0;
+        const grenades = data.grenade_count || 0;
+        const total = commercial + military + guns + grenades || 1;
         
         // Update commercial bar
         const commercialValue = document.getElementById('commercial-count');
@@ -289,6 +298,24 @@
         if (militaryFill) militaryFill.style.width = `${(military / total) * 100}%`;
     }
     
+    function updateWeaponCounts(data) {
+        const guns = data.gun_count || 0;
+        const grenades = data.grenade_count || 0;
+        const commercial = data.commercial_count || 0;
+        const military = data.military_count || 0;
+        const total = commercial + military + guns + grenades || 1;
+
+        const gunValue = document.getElementById('gun-count');
+        const gunFill = document.getElementById('gun-fill');
+        if (gunValue) gunValue.textContent = guns;
+        if (gunFill) gunFill.style.width = `${(guns / total) * 100}%`;
+
+        const grenadeValue = document.getElementById('grenade-count');
+        const grenadeFill = document.getElementById('grenade-fill');
+        if (grenadeValue) grenadeValue.textContent = grenades;
+        if (grenadeFill) grenadeFill.style.width = `${(grenades / total) * 100}%`;
+    }
+    
     function updateDetectionLog(detections) {
         const container = document.getElementById('detection-log');
         if (!container) return;
@@ -298,8 +325,12 @@
             return;
         }
         
-        const newHTML = detections.slice(0, 20).map(det => `
-            <div class="log-entry ${det.type === 'military_vehicle' ? 'military' : ''} ${det.confirmed === false ? 'tentative' : ''}">
+        const newHTML = detections.slice(0, 20).map(det => {
+            const entryClass = det.type === 'military_vehicle' ? 'military' :
+                               det.type === 'gun' ? 'weapon-gun' :
+                               det.type === 'Grenade' ? 'weapon-grenade' : '';
+            return `
+            <div class="log-entry ${entryClass} ${det.confirmed === false ? 'tentative' : ''}">
                 <div class="log-entry-id">${det.track_id ? '#' + det.track_id : '--'}</div>
                 <div class="log-entry-info">
                     <div class="log-entry-type">${formatClassName(det.type)}</div>
@@ -307,7 +338,7 @@
                 </div>
                 <div class="log-entry-time">${det.time}</div>
             </div>
-        `).join('');
+        `}).join('');
         
         // Only update if content changed
         if (container.innerHTML !== newHTML) {
@@ -466,6 +497,32 @@
                     if (display) display.textContent = value.toFixed(2);
                 }
             });
+            
+            // Weapon toggle states
+            const gunToggle = document.querySelector('[data-config="enable_gun_detection"]');
+            if (gunToggle) {
+                gunToggle.classList.toggle('active', !!config.enable_gun_detection);
+                const slider = document.getElementById('gun-conf-slider');
+                if (slider) slider.style.display = config.enable_gun_detection ? 'block' : 'none';
+            }
+            const grenadeToggle = document.querySelector('[data-config="enable_grenade_detection"]');
+            if (grenadeToggle) {
+                grenadeToggle.classList.toggle('active', !!config.enable_grenade_detection);
+                const slider = document.getElementById('grenade-conf-slider');
+                if (slider) slider.style.display = config.enable_grenade_detection ? 'block' : 'none';
+            }
+
+            // Weapon confidence sliders
+            if (config.weapon_conf) {
+                Object.entries(config.weapon_conf).forEach(([key, value]) => {
+                    const slider = document.querySelector(`input[data-config="weapon_conf.${key}"]`);
+                    if (slider) {
+                        slider.value = value;
+                        const display = slider.parentElement.querySelector('.slider-value');
+                        if (display) display.textContent = value.toFixed(2);
+                    }
+                });
+            }
         } catch (e) {
             console.error('[Config] Load error:', e);
         }

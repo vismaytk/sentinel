@@ -286,7 +286,9 @@ class Database:
                 SELECT 
                     strftime('%H:%M', timestamp) as minute,
                     SUM(CASE WHEN vehicle_type = 'commercial-vehicle' THEN 1 ELSE 0 END) as commercial,
-                    SUM(CASE WHEN vehicle_type = 'military_vehicle' THEN 1 ELSE 0 END) as military
+                    SUM(CASE WHEN vehicle_type = 'military_vehicle' THEN 1 ELSE 0 END) as military,
+                    SUM(CASE WHEN vehicle_type = 'gun' THEN 1 ELSE 0 END) as gun,
+                    SUM(CASE WHEN vehicle_type = 'Grenade' THEN 1 ELSE 0 END) as grenade
                 FROM detections
                 {base_filter}
                 GROUP BY minute
@@ -389,6 +391,8 @@ class Database:
                     COUNT(*) as total_detections,
                     SUM(CASE WHEN vehicle_type = 'military_vehicle' THEN 1 ELSE 0 END) as military_count,
                     SUM(CASE WHEN vehicle_type = 'commercial-vehicle' THEN 1 ELSE 0 END) as commercial_count,
+                    SUM(CASE WHEN vehicle_type = 'gun' THEN 1 ELSE 0 END) as gun_count,
+                    SUM(CASE WHEN vehicle_type = 'Grenade' THEN 1 ELSE 0 END) as grenade_count,
                     SUM(CASE WHEN plate_text IS NOT NULL AND plate_text != '' THEN 1 ELSE 0 END) as plate_read_count
                 FROM detections
                 GROUP BY session_id

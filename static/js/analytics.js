@@ -17,9 +17,11 @@
     
     const COLORS = {
         operative: '#00d4ff',
-        threat: '#ff4444',
-        clear: '#00ff88',
-        plate: '#ffcc00',
+        military: '#1e90ff',
+        commercial: '#00ff88',
+        gun: '#ff2d55',
+        grenade: '#ff9f1a',
+        plate: '#ffd400',
         warning: '#ff8800',
         surface: '#080d13',
         border: '#1a2535',
@@ -104,28 +106,56 @@
         // Reverse to show oldest first
         const reversed = [...timeline].reverse();
         
+        // Check if any weapons were detected
+        const hasGuns = reversed.some(d => (d.gun || 0) > 0);
+        const hasGrenades = reversed.some(d => (d.grenade || 0) > 0);
+        
+        const datasets = [
+            {
+                label: 'Commercial',
+                data: reversed.map(d => d.commercial || 0),
+                borderColor: COLORS.commercial,
+                backgroundColor: 'rgba(0, 255, 136, 0.1)',
+                fill: true,
+                tension: 0.3,
+            },
+            {
+                label: 'Military',
+                data: reversed.map(d => d.military || 0),
+                borderColor: COLORS.military,
+                backgroundColor: 'rgba(30, 144, 255, 0.1)',
+                fill: true,
+                tension: 0.3,
+            },
+        ];
+        
+        // Add weapon datasets if detected
+        if (hasGuns) {
+            datasets.push({
+                label: 'Gun',
+                data: reversed.map(d => d.gun || 0),
+                borderColor: COLORS.gun,
+                backgroundColor: 'rgba(255, 45, 85, 0.1)',
+                fill: true,
+                tension: 0.3,
+            });
+        }
+        if (hasGrenades) {
+            datasets.push({
+                label: 'Grenade',
+                data: reversed.map(d => d.grenade || 0),
+                borderColor: COLORS.grenade,
+                backgroundColor: 'rgba(255, 159, 26, 0.1)',
+                fill: true,
+                tension: 0.3,
+            });
+        }
+        
         return new Chart(canvas, {
             type: 'line',
             data: {
                 labels: reversed.map(d => d.minute),
-                datasets: [
-                    {
-                        label: 'Commercial',
-                        data: reversed.map(d => d.commercial || 0),
-                        borderColor: COLORS.clear,
-                        backgroundColor: 'rgba(0, 255, 136, 0.1)',
-                        fill: true,
-                        tension: 0.3,
-                    },
-                    {
-                        label: 'Military',
-                        data: reversed.map(d => d.military || 0),
-                        borderColor: COLORS.threat,
-                        backgroundColor: 'rgba(255, 68, 68, 0.1)',
-                        fill: true,
-                        tension: 0.3,
-                    },
-                ],
+                datasets: datasets,
             },
             options: {
                 responsive: true,
@@ -166,15 +196,23 @@
         const dist = data.type_distribution || {};
         const commercial = dist['commercial-vehicle'] || 0;
         const military = dist['military_vehicle'] || 0;
-        const total = commercial + military;
+        const guns = dist['gun'] || 0;
+        const grenades = dist['Grenade'] || 0;
+        const total = commercial + military + guns + grenades;
+
+        const labels = ['Commercial', 'Military'];
+        const values = [commercial, military];
+        const colors = [COLORS.commercial, COLORS.military];
+        if (guns > 0)    { labels.push('Gun');     values.push(guns);     colors.push(COLORS.gun); }
+        if (grenades > 0){ labels.push('Grenade'); values.push(grenades); colors.push(COLORS.grenade); }
         
         return new Chart(canvas, {
             type: 'doughnut',
             data: {
-                labels: ['Commercial', 'Military'],
+                labels: labels,
                 datasets: [{
-                    data: [commercial, military],
-                    backgroundColor: [COLORS.clear, COLORS.threat],
+                    data: values,
+                    backgroundColor: colors,
                     borderColor: COLORS.surface,
                     borderWidth: 3,
                 }],
@@ -275,7 +313,7 @@
                 labels: ['Min', 'Avg', 'Max'],
                 datasets: [{
                     data: [perf.min_fps || 0, perf.avg_fps || 0, perf.max_fps || 0],
-                    backgroundColor: [COLORS.threat, COLORS.operative, COLORS.clear],
+                    backgroundColor: [COLORS.gun, COLORS.operative, COLORS.commercial],
                     borderRadius: 4,
                 }],
             },
@@ -397,6 +435,8 @@
                         <th>Start</th>
                         <th>Detections</th>
                         <th>Military</th>
+                        <th>Guns</th>
+                        <th>Grenades</th>
                         <th>Plates</th>
                     </tr>
                 </thead>
@@ -414,6 +454,8 @@
                     <td>${formatTime(session.start_time)}</td>
                     <td class="mono">${session.total_detections}</td>
                     <td class="mono military">${session.military_count}</td>
+                    <td class="mono gun">${session.gun_count || 0}</td>
+                    <td class="mono grenade">${session.grenade_count || 0}</td>
                     <td class="mono">${plateRate}%</td>
                 </tr>
             `;

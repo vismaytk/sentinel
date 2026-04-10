@@ -32,12 +32,16 @@ class DetectionResult:
     plate_text: Optional[str] = None
     timestamp: str = ""
     raw_confidence: float = 0.0  # Pre-calibration confidence
+    detection_category: str = "vehicle"  # "vehicle" or "weapon"
     
     def __post_init__(self):
         if not self.timestamp:
             self.timestamp = datetime.now().isoformat()
         if self.raw_confidence == 0.0:
             self.raw_confidence = self.confidence
+        # Set category based on detection type (weapons vs vehicles)
+        if self.vehicle_type in ("gun", "Grenade"):
+            self.detection_category = "weapon"
     
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -51,6 +55,7 @@ class DetectionResult:
             "plate_conf": round(self.plate_conf, 3) if self.plate_conf else None,
             "plate_text": self.plate_text,
             "timestamp": self.timestamp,
+            "detection_category": self.detection_category,
         }
 
 
@@ -255,7 +260,7 @@ class Detector:
         
         vehicle_results = self.vehicle_model.predict(
             source=frame,
-            classes=list(self.cfg.TARGET_CLASSES),
+            classes=list(self.cfg.get_active_classes()),
             conf=min_conf,
             verbose=False,
             imgsz=imgsz,
@@ -411,6 +416,11 @@ class Detector:
             cv2.rectangle(annotated, (vx1, vy1 - th - 8), (vx1 + tw + 4, vy1), color, -1)
             cv2.putText(annotated, vlabel, (vx1 + 2, vy1 - 5),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.cfg.COLOR_TEXT_BG, 2)
+            
+            # Skip plate detection for weapons — no plates on guns/grenades
+            if det.detection_category == "weapon":
+                detections.append(det)
+                continue
             
             # Stage 2: License plate detection within vehicle bbox
             pad_x = int((vx2 - vx1) * 0.05)

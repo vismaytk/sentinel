@@ -81,6 +81,17 @@
             });
         }
         
+        // Weapon confidence sliders
+        if (config.weapon_conf) {
+            Object.entries(config.weapon_conf).forEach(([key, value]) => {
+                const slider = document.querySelector(`input[data-config="weapon_conf.${key}"]`);
+                if (slider) {
+                    slider.value = value;
+                    updateSliderDisplay(slider);
+                }
+            });
+        }
+        
         // YOLO image size
         const imgsizeSelect = document.querySelector('[data-config="yolo_imgsz"]');
         if (imgsizeSelect && config.yolo_imgsz) {
@@ -102,6 +113,21 @@
         const trackingToggle = document.querySelector('[data-config="enable_tracking"]');
         if (trackingToggle) {
             trackingToggle.classList.toggle('active', config.enable_tracking);
+        }
+        
+        // Weapon detection toggles
+        const gunToggle = document.querySelector('[data-config="enable_gun_detection"]');
+        if (gunToggle) {
+            gunToggle.classList.toggle('active', config.enable_gun_detection);
+            const gunSlider = document.getElementById('gun-conf-slider');
+            if (gunSlider) gunSlider.style.display = config.enable_gun_detection ? 'block' : 'none';
+        }
+        
+        const grenadeToggle = document.querySelector('[data-config="enable_grenade_detection"]');
+        if (grenadeToggle) {
+            grenadeToggle.classList.toggle('active', config.enable_grenade_detection);
+            const grenadeSlider = document.getElementById('grenade-conf-slider');
+            if (grenadeSlider) grenadeSlider.style.display = config.enable_grenade_detection ? 'block' : 'none';
         }
     }
     
@@ -157,6 +183,17 @@
                 const key = e.target.dataset.config;
                 config[key] = !config[key];
                 e.target.classList.toggle('active', config[key]);
+                
+                // Show/hide weapon confidence sliders when weapon toggles change
+                if (key === 'enable_gun_detection') {
+                    const slider = document.getElementById('gun-conf-slider');
+                    if (slider) slider.style.display = config[key] ? 'block' : 'none';
+                }
+                if (key === 'enable_grenade_detection') {
+                    const slider = document.getElementById('grenade-conf-slider');
+                    if (slider) slider.style.display = config[key] ? 'block' : 'none';
+                }
+                
                 saveConfig();
             });
         });
