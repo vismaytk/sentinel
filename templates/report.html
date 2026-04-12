@@ -371,14 +371,14 @@
 {% endblock %}
 
 {% block content %}
-<div style="padding-top: calc(var(--header-height) + 16px); padding-left: 16px; padding-right: 16px; padding-bottom: 16px;">
+<div class="report-page-pad">
 <div class="print-controls">
     <button class="print-btn" onclick="window.print()">
         Print Report
     </button>
-    <!-- <a class="print-btn" href="/report/pdf" style="text-decoration: none;">
+    <a class="print-btn" href="/report/pdf">
         Download PDF
-    </a> -->
+    </a>
     <button class="print-btn" onclick="location.reload()">
         Refresh Data
     </button>
@@ -417,17 +417,17 @@
         </div>
         
         {% if gun_count > 0 or grenade_count > 0 %}
-        <div class="summary-grid" style="margin-top: 1rem;">
-            <div class="summary-card" style="border-color: #ff2d55;">
+        <div class="summary-grid summary-grid-weapons">
+            <div class="summary-card summary-card-gun">
                 <div class="summary-value type-gun">{{ gun_count }}</div>
                 <div class="summary-label">Guns Detected</div>
             </div>
-            <div class="summary-card" style="border-color: #ff9f1a;">
+            <div class="summary-card summary-card-grenade">
                 <div class="summary-value type-grenade">{{ grenade_count }}</div>
                 <div class="summary-label">Grenades Detected</div>
             </div>
-            <div class="summary-card" style="border-color: #00d4ff;">
-                <div class="summary-value" style="color: #00d4ff;">{{ gun_count + grenade_count }}</div>
+            <div class="summary-card summary-card-weapons-total">
+                <div class="summary-value summary-value-weapons-total">{{ gun_count + grenade_count }}</div>
                 <div class="summary-label">Total Weapon Threats</div>
             </div>
             <div class="summary-card">
@@ -437,7 +437,7 @@
         </div>
         {% endif %}
         
-        <div style="margin-top: 1rem; text-align: center;">
+        <div class="threat-indicator-wrap">
             <span class="threat-indicator threat-{{ threat_level|lower }}">
                 Threat Level: {{ threat_level }}
             </span>
@@ -562,8 +562,8 @@
     </div>
     {% endif %}
     
-    <div class="report-section" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-        <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">
+    <div class="report-section report-footer">
+        <div class="report-footer-note">
             SENTINEL Vehicle Intelligence Platform &bull; 
             Classification: INTERNAL USE ONLY &bull;
             Report generated automatically

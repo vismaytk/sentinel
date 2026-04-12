@@ -503,13 +503,13 @@
             if (gunToggle) {
                 gunToggle.classList.toggle('active', !!config.enable_gun_detection);
                 const slider = document.getElementById('gun-conf-slider');
-                if (slider) slider.style.display = config.enable_gun_detection ? 'block' : 'none';
+                if (slider) slider.classList.toggle('is-hidden', !config.enable_gun_detection);
             }
             const grenadeToggle = document.querySelector('[data-config="enable_grenade_detection"]');
             if (grenadeToggle) {
                 grenadeToggle.classList.toggle('active', !!config.enable_grenade_detection);
                 const slider = document.getElementById('grenade-conf-slider');
-                if (slider) slider.style.display = config.enable_grenade_detection ? 'block' : 'none';
+                if (slider) slider.classList.toggle('is-hidden', !config.enable_grenade_detection);
             }
 
             // Weapon confidence sliders

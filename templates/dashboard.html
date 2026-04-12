@@ -154,7 +154,7 @@
         </div>
         
         <!-- Threat Log -->
-        <div class="card" style="flex: 1;">
+        <div class="card card-fill">
             <div class="card-header">
                 <h3>Threat Log</h3>
             </div>
@@ -169,11 +169,11 @@
         
         <!-- Config Panel -->
         <div class="card config-card">
-            <div class="config-header">
+            <div class="config-header" role="button" tabindex="0" aria-expanded="true" aria-controls="config-body">
                 <h3>Configuration</h3>
                 <span class="config-toggle">▼</span>
             </div>
-            <div class="config-body">
+            <div class="config-body" id="config-body">
                 <div class="config-section">
                     <div class="config-section-title">Vehicle Detection</div>
                     
@@ -186,7 +186,7 @@
                                data-config="vehicle_conf.commercial-vehicle">
                     </div>
                     
-                    <div class="slider-container" style="margin-top: 12px;">
+                    <div class="slider-container u-mt-12">
                         <div class="slider-header">
                             <span class="slider-label">Military Confidence</span>
                             <span class="slider-value">0.30</span>
@@ -204,7 +204,7 @@
                         <div class="toggle-switch" data-config="enable_gun_detection"></div>
                     </div>
                     
-                    <div class="slider-container" id="gun-conf-slider" style="margin-top:10px; display:none;">
+                    <div class="slider-container u-mt-10 is-hidden" id="gun-conf-slider">
                         <div class="slider-header">
                             <span class="slider-label">Gun Confidence</span>
                             <span class="slider-value">0.45</span>
@@ -213,12 +213,12 @@
                                data-config="weapon_conf.gun">
                     </div>
                     
-                    <div class="config-row" style="margin-top:10px;">
+                    <div class="config-row u-mt-10">
                         <span class="config-label">Grenade Detection</span>
                         <div class="toggle-switch" data-config="enable_grenade_detection"></div>
                     </div>
                     
-                    <div class="slider-container" id="grenade-conf-slider" style="margin-top:10px; display:none;">
+                    <div class="slider-container u-mt-10 is-hidden" id="grenade-conf-slider">
                         <div class="slider-header">
                             <span class="slider-label">Grenade Confidence</span>
                             <span class="slider-value">0.45</span>

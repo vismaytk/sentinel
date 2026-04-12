@@ -18,7 +18,8 @@
     
     {% block head %}{% endblock %}
 </head>
-<body>
+<body class="app-shell {{ request.endpoint|replace('.', '-') if request.endpoint else '' }}">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <!-- Header -->
     <header class="header">
         <div class="header-left">
@@ -59,7 +60,7 @@
                 </div>
             </div>
             
-            <nav class="nav-tabs">
+            <nav class="nav-tabs" aria-label="Primary navigation">
                 <a href="/" class="nav-tab {% if request.endpoint == 'main.dashboard' %}active{% endif %}">LIVE FEED</a>
                 <a href="/analytics" class="nav-tab {% if request.endpoint == 'main.analytics' %}active{% endif %}">ANALYTICS</a>
                 <a href="/report" class="nav-tab {% if request.endpoint == 'main.report' %}active{% endif %}">REPORT</a>
@@ -68,7 +69,9 @@
     </header>
     
     <!-- Main Content -->
+    <div id="main-content">
     {% block content %}{% endblock %}
+    </div>
     
     <!-- Scripts -->
     {% block scripts %}{% endblock %}

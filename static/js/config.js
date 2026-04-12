@@ -12,6 +12,7 @@
     
     let config = {};
     let dirty = false;
+    let resizeRaf = null;
 
     // ═══════════════════════════════════════════════════════════
     // API
@@ -117,18 +118,18 @@
         
         // Weapon detection toggles
         const gunToggle = document.querySelector('[data-config="enable_gun_detection"]');
-        if (gunToggle) {
-            gunToggle.classList.toggle('active', config.enable_gun_detection);
-            const gunSlider = document.getElementById('gun-conf-slider');
-            if (gunSlider) gunSlider.style.display = config.enable_gun_detection ? 'block' : 'none';
-        }
+            if (gunToggle) {
+                gunToggle.classList.toggle('active', config.enable_gun_detection);
+                const gunSlider = document.getElementById('gun-conf-slider');
+                if (gunSlider) gunSlider.classList.toggle('is-hidden', !config.enable_gun_detection);
+            }
         
         const grenadeToggle = document.querySelector('[data-config="enable_grenade_detection"]');
-        if (grenadeToggle) {
-            grenadeToggle.classList.toggle('active', config.enable_grenade_detection);
-            const grenadeSlider = document.getElementById('grenade-conf-slider');
-            if (grenadeSlider) grenadeSlider.style.display = config.enable_grenade_detection ? 'block' : 'none';
-        }
+            if (grenadeToggle) {
+                grenadeToggle.classList.toggle('active', config.enable_grenade_detection);
+                const grenadeSlider = document.getElementById('grenade-conf-slider');
+                if (grenadeSlider) grenadeSlider.classList.toggle('is-hidden', !config.enable_grenade_detection);
+            }
     }
     
     function updateSliderDisplay(slider) {
@@ -187,11 +188,11 @@
                 // Show/hide weapon confidence sliders when weapon toggles change
                 if (key === 'enable_gun_detection') {
                     const slider = document.getElementById('gun-conf-slider');
-                    if (slider) slider.style.display = config[key] ? 'block' : 'none';
+                    if (slider) slider.classList.toggle('is-hidden', !config[key]);
                 }
                 if (key === 'enable_grenade_detection') {
                     const slider = document.getElementById('grenade-conf-slider');
-                    if (slider) slider.style.display = config[key] ? 'block' : 'none';
+                    if (slider) slider.classList.toggle('is-hidden', !config[key]);
                 }
                 
                 saveConfig();
@@ -204,11 +205,56 @@
         const configToggle = document.querySelector('.config-toggle');
         
         if (configHeader && configBody) {
-            configHeader.addEventListener('click', () => {
-                configBody.classList.toggle('open');
-                if (configToggle) {
-                    configToggle.classList.toggle('open');
+            let isConfigOpen = true;
+
+            const applyConfigPanelState = () => {
+                configBody.classList.toggle('open', isConfigOpen);
+                configHeader.setAttribute('aria-expanded', isConfigOpen ? 'true' : 'false');
+                if (configToggle) configToggle.classList.toggle('open', isConfigOpen);
+            };
+
+            const reconcileHeight = () => {
+                // Keep panel content reachable after viewport changes.
+                if (window.matchMedia('(max-width: 768px)').matches) {
+                    configBody.style.maxHeight = '';
+                    return;
                 }
+                const viewportAllowance = Math.max(260, window.innerHeight - 220);
+                if (isConfigOpen) {
+                    configBody.style.maxHeight = `${Math.min(viewportAllowance, 760)}px`;
+                } else {
+                    configBody.style.maxHeight = '0px';
+                }
+            };
+
+            const updateConfigPanelState = (forceOpen = null) => {
+                if (forceOpen !== null) {
+                    isConfigOpen = forceOpen;
+                }
+                applyConfigPanelState();
+                reconcileHeight();
+            };
+
+            updateConfigPanelState(true);
+
+            const toggleConfigPanel = () => {
+                updateConfigPanelState(!isConfigOpen);
+            };
+
+            configHeader.addEventListener('click', toggleConfigPanel);
+            configHeader.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleConfigPanel();
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (resizeRaf) cancelAnimationFrame(resizeRaf);
+                resizeRaf = requestAnimationFrame(() => {
+                    applyConfigPanelState();
+                    reconcileHeight();
+                });
             });
         }
     }
