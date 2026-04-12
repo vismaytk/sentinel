@@ -18,7 +18,7 @@ from uuid import uuid4
 from config import get_config
 from core import (
     get_detector, get_camera, get_database, stop_camera, close_database,
-    run_validation, get_alert_engine
+    run_validation, get_alert_engine, get_ocr
 )
 from api import create_app
 
@@ -62,12 +62,12 @@ def print_banner():
   
   +-----------------------------------------------------------+
   |  FEATURES                                                 |
-  |  +-- Detection:   YOLOv8 @ {cfg.YOLO_IMGSZ}px (every {cfg.DETECT_EVERY_N} frames)          |
-  |  +-- Tracking:    {'Enabled' if cfg.ENABLE_TRACKING else 'Disabled'}                                       |
-  |  +-- OCR:         {'Enabled' if cfg.ENABLE_OCR else 'Disabled'}                                       |
-  |  +-- TTA:         {'Enabled' if cfg.ENABLE_TTA else 'Disabled'}                                       |
-  |  +-- Multi-Scale: {'Enabled' if cfg.MULTI_SCALE_INFERENCE else 'Disabled'}                                       |
-  |  +-- Database:    SQLite (WAL mode)                        |
+  |  +-- Detection:   YOLOv8 @ {cfg.YOLO_IMGSZ}px (every {cfg.DETECT_EVERY_N} frames)         |
+  |  +-- Tracking:    {'Enabled' if cfg.ENABLE_TRACKING else 'Disabled'}                                |
+  |  +-- OCR:         {'Enabled' if cfg.ENABLE_OCR else 'Disabled'}                                 |
+  |  +-- TTA:         {'Enabled' if cfg.ENABLE_TTA else 'Disabled'}                                |
+  |  +-- Multi-Scale: {'Enabled' if cfg.MULTI_SCALE_INFERENCE else 'Disabled'}                                |
+  |  +-- Database:    SQLite (WAL mode)                       |
   +-----------------------------------------------------------+
 """
     print(banner)
@@ -121,6 +121,11 @@ def main():
     print("  [*] Warming up detection models...")
     detector = get_detector()
     detector.warmup()
+
+    # Warmup OCR model to avoid first plate timeout
+    if cfg.ENABLE_OCR:
+        print("  [*] Warming up OCR model...")
+        get_ocr().warmup()
     
     # Initialize alert engine
     from datetime import datetime

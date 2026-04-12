@@ -72,10 +72,11 @@ class Config:
     TRACK_IOU_THRESHOLD: float = 0.3
     
     # ── OCR Settings ──────────────────────────────────────────────
-    ENABLE_OCR: bool = True
+    ENABLE_OCR: bool = False
     OCR_GPU: bool = False
     OCR_LANGUAGES: tuple = ('en',)
-    OCR_TIMEOUT_MS: int = 200
+    OCR_TIMEOUT_MS: int = 2500
+    OCR_MIN_TEXT_CONF: float = 0.20
     OCR_MIN_MOVEMENT_PX: int = 10  # Min bbox movement to re-run OCR
     OCR_COOLDOWN_SEC: float = 2.0  # Min time between OCR on same track
     OCR_WORKERS: int = 2  # Thread pool workers for parallel OCR
@@ -88,7 +89,7 @@ class Config:
     # Platt scaling calibration coefficients per class
     PLATT_A: Dict[str, float] = field(default_factory=lambda: {
         "military_vehicle": 2.5,
-        "commercial-vehicle": 2.0,
+        "commercial-vehicle": 3.0,
         "gun": 2.2,
         "Grenade": 2.2,
     })

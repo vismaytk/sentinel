@@ -376,9 +376,9 @@
     <button class="print-btn" onclick="window.print()">
         Print Report
     </button>
-    <a class="print-btn" href="/report/pdf" style="text-decoration: none;">
+    <!-- <a class="print-btn" href="/report/pdf" style="text-decoration: none;">
         Download PDF
-    </a>
+    </a> -->
     <button class="print-btn" onclick="location.reload()">
         Refresh Data
     </button>
@@ -480,6 +480,7 @@
                     <th>Confidence</th>
                     <th>Track ID</th>
                     <th>Plate</th>
+                    <th>Plate OCR</th>
                 </tr>
             </thead>
             <tbody>
@@ -497,6 +498,13 @@
                     <td>
                         {% if det.plate %}
                         <span class="plate-text">{{ det.plate }}</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if det.plate_conf is not none %}
+                        {{ (det.plate_conf * 100)|round(1) }}%
                         {% else %}
                         -
                         {% endif %}

@@ -173,6 +173,27 @@ class DetectionWorker:
                         if text:
                             det.plate_text = text
                             det.plate_conf = conf
+                            # Surface OCR text directly on annotated stream.
+                            x1, y1, _, _ = det.plate_bbox
+                            label = f"{text} {conf:.2f}" if conf is not None else text
+                            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                            top = max(0, y1 - th - 8)
+                            cv2.rectangle(
+                                annotated,
+                                (x1, top),
+                                (x1 + tw + 6, top + th + 8),
+                                cfg.COLOR_PLATE,
+                                -1
+                            )
+                            cv2.putText(
+                                annotated,
+                                label,
+                                (x1 + 3, top + th + 2),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                cfg.COLOR_TEXT_BG,
+                                1
+                            )
             
             # Check zone occupancy and draw zones
             zone_results = None
@@ -396,6 +417,7 @@ def update_stats(
                 "type": det.vehicle_type,
                 "conf": round(det.confidence, 2),
                 "plate": det.plate_text,
+                "plate_conf": round(det.plate_conf, 2) if det.plate_conf is not None else None,
                 "track_id": det.track_id,
                 "time": datetime.now().strftime("%H:%M:%S"),
                 "confirmed": is_confirmed,
@@ -590,6 +612,26 @@ def generate_frames_legacy() -> Generator[bytes, None, None]:
                         if text:
                             det.plate_text = text
                             det.plate_conf = conf
+                            x1, y1, _, _ = det.plate_bbox
+                            label = f"{text} {conf:.2f}" if conf is not None else text
+                            (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+                            top = max(0, y1 - th - 8)
+                            cv2.rectangle(
+                                annotated,
+                                (x1, top),
+                                (x1 + tw + 6, top + th + 8),
+                                cfg.COLOR_PLATE,
+                                -1
+                            )
+                            cv2.putText(
+                                annotated,
+                                label,
+                                (x1 + 3, top + th + 2),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                0.5,
+                                cfg.COLOR_TEXT_BG,
+                                1
+                            )
             
             cached_annotated = annotated
             cached_detections = detections
@@ -686,6 +728,7 @@ def _build_report_context() -> Dict[str, Any]:
             "conf": int(det.get("conf", 0) * 100),
             "track_id": det.get("track_id"),
             "plate": det.get("plate"),
+            "plate_conf": det.get("plate_conf"),
         })
 
     return {

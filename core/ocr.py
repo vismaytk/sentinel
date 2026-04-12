@@ -11,8 +11,9 @@ import numpy as np
 import hashlib
 import time
 import threading
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, List
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+from collections import deque
 
 from config import get_config
 
@@ -44,17 +45,44 @@ class PlateOCR:
         self._cache: Dict[str, Tuple[Optional[str], Optional[float]]] = {}
         self._cache_lock = threading.Lock()
         self._executor = ThreadPoolExecutor(max_workers=self.cfg.OCR_WORKERS)
-        self._disabled = False  # Set True if initialization fails
+        self._disabled = False  # Permanent disable only when dependency missing
+        self._next_init_retry_ts = 0.0
         self._logged_errors: set = set()  # Track logged exception types
         
         # Track OCR timing per track_id
         self._track_ocr_times: Dict[int, float] = {}
         self._track_ocr_bboxes: Dict[int, Tuple[int, int, int, int]] = {}
+        self._last_global_ocr_time: float = 0.0
+        self._last_global_bbox: Optional[Tuple[int, int, int, int]] = None
+        self._ocr_inflight_lock = threading.Lock()
+        self._duration_samples = deque(maxlen=20)
+        self._warmed_up = False
+        self._last_success_text: Optional[str] = None
+        self._last_success_conf: Optional[float] = None
+        self._last_success_bbox: Optional[Tuple[int, int, int, int]] = None
+        self._last_success_ts: float = 0.0
+
+    @staticmethod
+    def _normalize_plate_text(raw: str) -> str:
+        """Normalize OCR output to alphanumeric uppercase plate format."""
+        if not raw:
+            return ""
+        cleaned = "".join(ch for ch in raw.upper() if ch.isalnum())
+        # Typical plates are short alphanumeric strings; reject noise.
+        if len(cleaned) < 4 or len(cleaned) > 12:
+            return ""
+        has_alpha = any(ch.isalpha() for ch in cleaned)
+        has_digit = any(ch.isdigit() for ch in cleaned)
+        if not (has_alpha and has_digit):
+            return ""
+        return cleaned
     
     @property
     def reader(self):
         """Lazily initialize EasyOCR reader."""
         if self._disabled:
+            return None
+        if time.time() < self._next_init_retry_ts:
             return None
         if self._reader is None:
             with self._reader_lock:
@@ -69,9 +97,35 @@ class PlateOCR:
                         logger.info("EasyOCR ready")
                     except Exception as e:
                         logger.warning("Failed to initialize EasyOCR: %s", e)
-                        self._disabled = True
+                        # Retry later in case failure was transient (model download, startup race).
+                        self._next_init_retry_ts = time.time() + 30.0
                         return None
         return self._reader
+
+    def warmup(self) -> bool:
+        """Warm up OCR model to avoid first-inference latency spikes."""
+        if self._warmed_up:
+            return self.reader is not None
+        r = self.reader
+        if r is None:
+            return False
+        try:
+            dummy = np.full((72, 220, 3), 255, dtype=np.uint8)
+            cv2.putText(dummy, "MH12AB1234", (10, 48), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 0), 2)
+            _ = r.readtext(
+                dummy,
+                detail=1,
+                paragraph=False,
+                allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            )
+            self._warmed_up = True
+            return True
+        except Exception as e:
+            err_type = type(e).__name__
+            if err_type not in self._logged_errors:
+                logger.warning("OCR warmup error (%s): %s", err_type, e)
+                self._logged_errors.add(err_type)
+            return False
     
     def _compute_bbox_hash(self, plate_crop: np.ndarray) -> str:
         """Compute hash of plate crop for caching."""
@@ -88,6 +142,14 @@ class PlateOCR:
         - Less than OCR_COOLDOWN_SEC has elapsed since last OCR on this track
         """
         if track_id is None:
+            now = time.time()
+            if now - self._last_global_ocr_time < self.cfg.OCR_COOLDOWN_SEC:
+                last_bbox = self._last_global_bbox
+                if last_bbox:
+                    dx = abs((bbox[0] + bbox[2]) / 2 - (last_bbox[0] + last_bbox[2]) / 2)
+                    dy = abs((bbox[1] + bbox[3]) / 2 - (last_bbox[1] + last_bbox[3]) / 2)
+                    if max(dx, dy) < self.cfg.OCR_MIN_MOVEMENT_PX:
+                        return False
             return True
         
         now = time.time()
@@ -152,22 +214,31 @@ class PlateOCR:
         if self.reader is None:
             return None, None
         
-        results = self.reader.readtext(preprocessed)
+        results = self.reader.readtext(
+            preprocessed,
+            detail=1,
+            paragraph=False,
+            allowlist="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+            text_threshold=0.4,
+            low_text=0.2,
+            link_threshold=0.3,
+        )
         
         if results:
-            texts = []
-            confs = []
+            best_text = None
+            best_conf = 0.0
             for (_, text, conf) in results:
-                if conf > 0.3:
-                    clean_text = text.replace(" ", "").upper()
-                    if len(clean_text) >= 2:
-                        texts.append(clean_text)
-                        confs.append(conf)
-            
-            if texts:
-                combined = "".join(texts)
-                avg_conf = sum(confs) / len(confs)
-                return combined, avg_conf
+                if conf < self.cfg.OCR_MIN_TEXT_CONF:
+                    continue
+                normalized = self._normalize_plate_text(text)
+                if not normalized:
+                    continue
+                score = conf * min(len(normalized), 8)
+                if best_text is None or score > best_conf:
+                    best_text = normalized
+                    best_conf = score
+            if best_text:
+                return best_text, float(best_conf / min(len(best_text), 8))
         
         return None, None
     
@@ -197,6 +268,23 @@ class PlateOCR:
                 logger.warning("OCR error (%s): %s", err_type, e)
                 self._logged_errors.add(err_type)
             return None, None
+
+    def _run_ocr_variants(self, plate_crop: np.ndarray) -> Tuple[Optional[str], Optional[float]]:
+        """
+        Try OCR across multiple preprocessing variants and choose best result.
+        """
+        preprocessed, inverted = self._preprocess_plate(plate_crop)
+        text, conf = self._run_ocr(preprocessed, inverted)
+        if text and (conf or 0.0) >= 0.55:
+            return text, conf
+
+        # Raw grayscale variant helps when adaptive threshold over-processes text
+        gray = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2GRAY) if len(plate_crop.shape) == 3 else plate_crop
+        gray_up = cv2.resize(gray, (gray.shape[1] * 2, gray.shape[0] * 2), interpolation=cv2.INTER_CUBIC)
+        text2, conf2 = self._run_ocr_single(gray_up)
+        if text2 and (not text or (conf2 or 0.0) > (conf or 0.0)):
+            return text2, conf2
+        return text, conf
     
     def read_plate(
         self,
@@ -221,18 +309,6 @@ class PlateOCR:
         if not self.cfg.ENABLE_OCR or not EASYOCR_AVAILABLE:
             return None, None
         
-        # Check throttling
-        if not self._should_run_ocr(track_id, plate_bbox):
-            # Return cached result for this track if available
-            if track_id is not None:
-                last_bbox = self._track_ocr_bboxes.get(track_id)
-                if last_bbox:
-                    cache_key = f"track_{track_id}"
-                    with self._cache_lock:
-                        if cache_key in self._cache:
-                            return self._cache[cache_key]
-            return None, None
-        
         # Extract plate crop
         x1, y1, x2, y2 = plate_bbox
         
@@ -249,20 +325,71 @@ class PlateOCR:
         if plate_crop.size == 0:
             return None, None
         
+        # Expand crop slightly for more OCR context
+        pad_x = max(2, int((x2 - x1) * 0.10))
+        pad_y = max(2, int((y2 - y1) * 0.15))
+        x1 = max(0, x1 - pad_x)
+        y1 = max(0, y1 - pad_y)
+        x2 = min(w, x2 + pad_x)
+        y2 = min(h, y2 + pad_y)
+        plate_crop = frame[y1:y2, x1:x2]
+        if plate_crop.size == 0:
+            return None, None
+
         # Check cache by image hash
         crop_hash = self._compute_bbox_hash(plate_crop)
         with self._cache_lock:
-            if crop_hash in self._cache:
-                return self._cache[crop_hash]
-        
-        # Preprocess (returns both normal and inverted)
-        preprocessed, inverted = self._preprocess_plate(plate_crop)
-        
+            cached = self._cache.get(crop_hash)
+            if cached and cached[0]:
+                return cached
+
+        # Check throttling after cache lookup so recent OCR can still propagate.
+        if not self._should_run_ocr(track_id, plate_bbox):
+            if track_id is not None:
+                cache_key = f"track_{track_id}"
+                with self._cache_lock:
+                    cached_track = self._cache.get(cache_key)
+                    if cached_track and cached_track[0]:
+                        return cached_track
+            if (
+                self._last_success_text
+                and self._last_success_bbox
+                and (time.time() - self._last_success_ts) <= max(3.0, self.cfg.OCR_COOLDOWN_SEC * 2)
+            ):
+                bx = (plate_bbox[0] + plate_bbox[2]) / 2
+                by = (plate_bbox[1] + plate_bbox[3]) / 2
+                lx = (self._last_success_bbox[0] + self._last_success_bbox[2]) / 2
+                ly = (self._last_success_bbox[1] + self._last_success_bbox[3]) / 2
+                if max(abs(bx - lx), abs(by - ly)) <= max(24, self.cfg.OCR_MIN_MOVEMENT_PX * 3):
+                    return self._last_success_text, self._last_success_conf
+            return None, None
+
+        # Prevent OCR queue pile-up when tracking is disabled or frame rate is high.
+        if not self._ocr_inflight_lock.acquire(blocking=False):
+            if track_id is not None:
+                cache_key = f"track_{track_id}"
+                with self._cache_lock:
+                    cached_track = self._cache.get(cache_key)
+                    if cached_track and cached_track[0]:
+                        return cached_track
+            return None, None
+
+        # Run OCR with adaptive timeout (based on recent OCR durations).
+        timeout_sec = max(0.5, self.cfg.OCR_TIMEOUT_MS / 1000.0)
+        if self._duration_samples:
+            p90_estimate = sorted(self._duration_samples)[int(len(self._duration_samples) * 0.9)]
+            timeout_sec = max(timeout_sec, min(8.0, p90_estimate * 1.5))
+        else:
+            timeout_sec = max(timeout_sec, 6.0)
+
         # Run OCR with timeout
         try:
-            future = self._executor.submit(self._run_ocr, preprocessed, inverted)
-            text, conf = future.result(timeout=self.cfg.OCR_TIMEOUT_MS / 1000.0)
+            started = time.time()
+            future = self._executor.submit(self._run_ocr_variants, plate_crop)
+            text, conf = future.result(timeout=timeout_sec)
+            self._duration_samples.append(time.time() - started)
         except FuturesTimeoutError:
+            future.cancel()
             return None, None
         except Exception as e:
             err_type = type(e).__name__
@@ -270,12 +397,22 @@ class PlateOCR:
                 logger.warning("OCR error in read_plate (%s): %s", err_type, e)
                 self._logged_errors.add(err_type)
             return None, None
+        finally:
+            self._last_global_ocr_time = time.time()
+            self._last_global_bbox = plate_bbox
+            self._ocr_inflight_lock.release()
         
         # Update cache
         with self._cache_lock:
-            self._cache[crop_hash] = (text, conf)
-            if track_id is not None:
-                self._cache[f"track_{track_id}"] = (text, conf)
+            # Cache positive OCR only; avoid poisoning cache with transient failures.
+            if text:
+                self._cache[crop_hash] = (text, conf)
+                if track_id is not None:
+                    self._cache[f"track_{track_id}"] = (text, conf)
+                self._last_success_text = text
+                self._last_success_conf = conf
+                self._last_success_bbox = plate_bbox
+                self._last_success_ts = time.time()
         
         # Update tracking info
         if track_id is not None:
