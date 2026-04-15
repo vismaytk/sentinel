@@ -1,5 +1,26 @@
 [
   {
+    "snapshot_id": "ca5a9287-847",
+    "timestamp": "2026-04-15T19:02:30.109541",
+    "image_path": "data/snapshots\\2026-04-15\\190230_ca5a9287-847.jpg",
+    "thumbnail_path": "data/snapshots/thumbnails\\thumb_190230_ca5a9287-847.jpg",
+    "vehicle_type": "military_vehicle",
+    "confidence": 0.49524396846706414,
+    "track_id": null,
+    "plate_text": null,
+    "plate_conf": null,
+    "bbox": [
+      0,
+      0,
+      958,
+      655
+    ],
+    "trigger": "military",
+    "session_id": "23e626ae-0adc-46cc-a5d0-8c418060c704",
+    "zone_id": null,
+    "zone_name": null
+  },
+  {
     "snapshot_id": "3639045b-a18",
     "timestamp": "2026-04-13T17:18:37.683003",
     "image_path": "data/snapshots\\2026-04-13\\171837_3639045b-a18.jpg",
@@ -20972,27 +20993,6 @@
       123,
       864,
       316
-    ],
-    "trigger": "weapon",
-    "session_id": "966b2cdf-6591-46b3-adb8-5a86538927ee",
-    "zone_id": null,
-    "zone_name": null
-  },
-  {
-    "snapshot_id": "77fd54fa-031",
-    "timestamp": "2026-04-11T00:10:00.461488",
-    "image_path": "data/snapshots\\2026-04-11\\001000_77fd54fa-031.jpg",
-    "thumbnail_path": "data/snapshots/thumbnails\\thumb_001000_77fd54fa-031.jpg",
-    "vehicle_type": "gun",
-    "confidence": 0.6633241616823013,
-    "track_id": null,
-    "plate_text": null,
-    "plate_conf": null,
-    "bbox": [
-      124,
-      351,
-      778,
-      543
     ],
     "trigger": "weapon",
     "session_id": "966b2cdf-6591-46b3-adb8-5a86538927ee",

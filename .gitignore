@@ -81,6 +81,7 @@ models/*.engine
 *.png
 *.gif
 *.bmp
+*.json
 !static/**/*.png
 !static/**/*.jpg
 
