@@ -25,11 +25,11 @@ class Config:
     
     # ── Model Settings ────────────────────────────────────────────
     VEHICLE_MODEL_PATH: str = "models/vehicle.pt"
-    PLATE_MODEL_PATH: str = "models/license_plate1.pt"
+    PLATE_MODEL_PATH: str = "models/license_plate.pt"
     
     # ── Inference Settings ────────────────────────────────────────
     INFERENCE_WIDTH: int = 640
-    YOLO_IMGSZ: int = 480
+    YOLO_IMGSZ: int = 640
     DETECT_EVERY_N: int = 2
     TARGET_CLASSES: tuple = (0, 1, 2, 3)  # commercial-vehicle, military_vehicle, gun, grenade
     
@@ -38,9 +38,11 @@ class Config:
     ENABLE_GRENADE_DETECTION: bool = True
     
     # ── NMS Settings (per-class) ──────────────────────────────────
-    NMS_IOU_MILITARY: float = 0.35  # Lower = less overlap for close targets
-    NMS_IOU_COMMERCIAL: float = 0.05
-    NMS_IOU_DEFAULT: float = 0.25
+    NMS_IOU_MILITARY: float = 0.7  # Lower = less overlap for close targets
+    NMS_IOU_COMMERCIAL: float = 0.7
+    NMS_IOU_GUN: float = 0.7
+    NMS_IOU_GRENADE: float = 0.7
+    NMS_IOU_DEFAULT: float = 0.45
     
     # ── Streaming Settings ────────────────────────────────────────
     JPEG_QUALITY: int = 65
@@ -50,7 +52,7 @@ class Config:
     # ── Per-Class Confidence Thresholds ───────────────────────────
     # These are mutable and can be updated via /config endpoint
     class_conf: Dict[str, float] = field(default_factory=lambda: {
-        "commercial-vehicle": 0.70,
+        "commercial-vehicle": 0.50,
         "military_vehicle": 0.50,
         "gun": 0.60,
         "Grenade": 0.60,
@@ -66,13 +68,13 @@ class Config:
     DB_CLEANUP_DAYS: int = 7
     
     # ── Tracking Settings ─────────────────────────────────────────
-    ENABLE_TRACKING: bool = False
+    ENABLE_TRACKING: bool = True
     TRACK_MAX_AGE: int = 30  # Frames before a track is dropped
     TRACK_MIN_HITS: int = 3  # Min detections before track is confirmed
     TRACK_IOU_THRESHOLD: float = 0.3
     
     # ── OCR Settings ──────────────────────────────────────────────
-    ENABLE_OCR: bool = False
+    ENABLE_OCR: bool = True
     OCR_GPU: bool = False
     OCR_LANGUAGES: tuple = ('en',)
     OCR_TIMEOUT_MS: int = 2500
@@ -88,10 +90,10 @@ class Config:
     
     # Platt scaling calibration coefficients per class
     PLATT_A: Dict[str, float] = field(default_factory=lambda: {
-        "military_vehicle": 2.5,
-        "commercial-vehicle": 3.0,
-        "gun": 2.2,
-        "Grenade": 2.2,
+        "military_vehicle": 3,
+        "commercial-vehicle": 3,
+        "gun": 3,
+        "Grenade": 3,
     })
     PLATT_B: Dict[str, float] = field(default_factory=lambda: {
         "military_vehicle": -1.5,
@@ -143,6 +145,10 @@ class Config:
             return self.NMS_IOU_MILITARY
         elif class_name == "commercial-vehicle":
             return self.NMS_IOU_COMMERCIAL
+        elif class_name == "gun":
+            return self.NMS_IOU_GUN
+        elif class_name == "Grenade":
+            return self.NMS_IOU_GRENADE
         return self.NMS_IOU_DEFAULT
 
 

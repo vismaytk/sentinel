@@ -81,7 +81,6 @@ models/*.engine
 *.png
 *.gif
 *.bmp
-*.json
 !static/**/*.png
 !static/**/*.jpg
 
@@ -111,3 +110,4 @@ desktop.ini
 *.bak
 *.tmp
 *.temp
+data/snapshots/index.json

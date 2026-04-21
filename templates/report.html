@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Intelligence Report - SENTINEL{% endblock %}
+{% block title %}Intelligence Report - DSAA{% endblock %}
 
 {% block head %}
 <style>
@@ -376,9 +376,9 @@
     <button class="print-btn" onclick="window.print()">
         Print Report
     </button>
-    <a class="print-btn" href="/report/pdf">
+    <!-- <a class="print-btn" href="/report/pdf">
         Download PDF
-    </a>
+    </a> -->
     <button class="print-btn" onclick="location.reload()">
         Refresh Data
     </button>
@@ -386,8 +386,8 @@
 
 <div class="report-container">
     <div class="report-header">
-        <div class="report-title">SENTINEL Intelligence Report</div>
-        <div class="report-subtitle">Vehicle Detection &amp; Surveillance Summary</div>
+        <div class="report-title">DSAA Intelligence Report</div>
+        <div class="report-subtitle">Detection &amp; Surveillance Summary</div>
         <div class="report-meta">
             <span>Session: {{ session_id }}</span>
             <span>Generated: {{ generated_at }}</span>
@@ -564,7 +564,7 @@
     
     <div class="report-section report-footer">
         <div class="report-footer-note">
-            SENTINEL Vehicle Intelligence Platform &bull; 
+            DSAA Defence Surveillance Automation & Analytics &bull; 
             Classification: INTERNAL USE ONLY &bull;
             Report generated automatically
         </div>
